@@ -149,13 +149,13 @@ public class MimicChestEater extends MimicChestPart {
         }, 0, 2 * 50);
     }
 
-    private void onInvClick(InventoryClickEvent event) {
+    public void onInvClick(InventoryClickEvent event) {
         if (eatenPlayer != null && event.getWhoClicked() == eatenPlayer) {
             event.setCancelled(true);
         }
     }
 
-    private void onPlayerMove(PlayerMoveEvent event) {
+    public void onPlayerMove(PlayerMoveEvent event) {
         if (event.getPlayer() != eatenPlayer) return;
         if (event instanceof PlayerTeleportEvent) {
             event.setCancelled(true);
@@ -168,7 +168,7 @@ public class MimicChestEater extends MimicChestPart {
         }
     }
 
-    private void onPlayerDeath(PlayerDeathEvent event) {
+    public void onPlayerDeath(PlayerDeathEvent event) {
         if (event.getEntity() != eatenPlayer) return;
         List<ItemStack> items = new ArrayList<>(event.getDrops());
         event.getDrops().clear();
@@ -200,20 +200,20 @@ public class MimicChestEater extends MimicChestPart {
                 .collect(Collectors.toList());
     }
 
-    private void onPlayerQuit(PlayerQuitEvent event) {
+    public void onPlayerQuit(PlayerQuitEvent event) {
         if (event.getPlayer() != eatenPlayer) return;
         Player player = eatenPlayer;
         player.setHealth(0); // Llama a onPlayerDeath
         eatenPlayer = null;
     }
 
-    private void onItemDrop(PlayerDropItemEvent event) {
+    public void onItemDrop(PlayerDropItemEvent event) {
         if (event.getPlayer() != eatenPlayer) return;
         eatItem(event.getItemDrop().getItemStack());
         event.getItemDrop().remove();
     }
 
-    private void onPlayerAttack(EntityDamageByEntityEvent event) {
+    public void onPlayerAttack(EntityDamageByEntityEvent event) {
         if (event.getDamager() != eatenPlayer) return;
         if (!isOpen) event.setCancelled(true);
     }
@@ -330,7 +330,7 @@ public class MimicChestEater extends MimicChestPart {
             MimicUtils.sendRealPlayerEquipment(eatenPlayer);
             eatenPlayer = null;
         }
-        removeHologram(); // Asegúrate de que el holograma se elimine cuando se destruya
+        removeHologram();
     }
 
     @Override
@@ -339,5 +339,21 @@ public class MimicChestEater extends MimicChestPart {
         if (this.health <= 0) {
             this.onDestroy(true);
         }
+    }
+
+    public void setEatItemChance(double eatItemChance) {
+        this.eatItemChance = eatItemChance;
+    }
+
+    public double getEatItemChance() {
+        return eatItemChance;
+    }
+
+    public void setEatenPlayer(Player eatenPlayer) {
+        this.eatenPlayer = eatenPlayer;
+    }
+
+    public Player getEatenPlayer() {
+        return eatenPlayer;
     }
 }

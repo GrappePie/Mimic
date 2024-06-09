@@ -4,7 +4,8 @@ import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.grappepie.mimic.commands.SpawnMimic;
-import org.grappepie.mimic.listeners.DungeonChestListener;
+import org.grappepie.mimic.listeners.MimicChestListener;
+import org.grappepie.mimic.listeners.MimicChestEaterListener;
 import org.grappepie.mimic.properties.MimicChestService;
 
 public final class Mimic extends JavaPlugin {
@@ -35,6 +36,7 @@ public final class Mimic extends JavaPlugin {
 
     private void registerListeners() {
         // Register event listeners here
-        Bukkit.getPluginManager().registerEvents(new DungeonChestListener(mimicChestService), this);
+        Bukkit.getPluginManager().registerEvents(new MimicChestListener(mimicChestService), this);
+        Bukkit.getPluginManager().registerEvents(new MimicChestEaterListener(mimicChestService), this);
     }
 }

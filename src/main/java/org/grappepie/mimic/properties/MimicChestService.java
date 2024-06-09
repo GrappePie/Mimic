@@ -7,64 +7,65 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.BlockExplodeEvent;
+import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityExplodeEvent;
-import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.event.entity.PlayerDeathEvent;
+import org.bukkit.event.inventory.InventoryClickEvent;
+import org.bukkit.event.player.*;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.json.JSONObject;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Timer;
+import java.util.*;
 
 public class MimicChestService {
     private static MimicChestService instance;
-    private String mimicChestName = ChatColor.translateAlternateColorCodes('&', "&eMimic");
+    private final String mimicChestName = ChatColor.translateAlternateColorCodes('&', "&eMimic");
     private final Map<Block, MimicChestPart> mimicParts = new HashMap<>();
 
     public MimicChestService() {
         instance = this;
-        startListen();
     }
 
-    private void startListen() {
-        // Implement event listeners here
+    public static MimicChestService getInstance() {
+        return instance;
+    }
+
+    public JavaPlugin getPlugin() {
+        return JavaPlugin.getProvidingPlugin(getClass());
     }
 
     public void onPlayerInteract(PlayerInteractEvent event) {
-    if (event.getClickedBlock() == null) return;
-    if (!(event.getPlayer().getGameMode() == GameMode.ADVENTURE || event.getPlayer().getGameMode() == GameMode.SURVIVAL)) return;
-    Block block = event.getClickedBlock();
-    if (!MimicUtils.chestTypes.contains(block.getType())) return;
-    if (!((Chest) block.getState()).getInventory().getViewers().isEmpty() &&
-            ((Chest) block.getState()).getInventory().getViewers().get(0).getOpenInventory().getTitle().startsWith(mimicChestName)) return;
-    Action action = event.getAction();
-    event.setCancelled(true);
+        if (event.getClickedBlock() == null) return;
+        if (!(event.getPlayer().getGameMode() == GameMode.ADVENTURE || event.getPlayer().getGameMode() == GameMode.SURVIVAL)) return;
+        Block block = event.getClickedBlock();
+        if (!MimicUtils.chestTypes.contains(block.getType())) return;
+        if (!((Chest) block.getState()).getInventory().getViewers().isEmpty() &&
+                ((Chest) block.getState()).getInventory().getViewers().get(0).getOpenInventory().getTitle().startsWith(mimicChestName)) return;
+        Action action = event.getAction();
+        event.setCancelled(true);
 
-    if (!mimicParts.containsKey(block) || mimicParts.get(block).isDestroyed()) {
-        MimicChestPart part = new MimicChestIdle(this, block); // Initialize as Idle
-        mimicParts.put(block, part);
-    }
-
-    MimicChestPart part = mimicParts.get(block);
-
-    if (part instanceof MimicChestIdle) {
-        if (action == Action.RIGHT_CLICK_BLOCK) {
-            MimicChestEater eater = new MimicChestEater(this, block, event.getPlayer(), new Timer(), null);
-            mimicParts.put(block, eater);
-            part.removeHologram(); // Remove Idle hologram
-            eater.updateHologram("Eater");
+        if (!mimicParts.containsKey(block) || mimicParts.get(block).isDestroyed()) {
+            MimicChestPart part = new MimicChestIdle(this, block);
+            mimicParts.put(block, part);
         }
-    } else if (part instanceof MimicChestEater) {
-        MimicChestEater eater = (MimicChestEater) part;
-        if (eater.isOpen()) eater.closeChest(false);
-        else eater.openChest(false);
-    }
 
-    event.setCancelled(false);
-}
+        MimicChestPart part = mimicParts.get(block);
+
+        if (part instanceof MimicChestIdle) {
+            if (action == Action.RIGHT_CLICK_BLOCK) {
+                MimicChestEater eater = new MimicChestEater(this, block, event.getPlayer(), new Timer(), null);
+                mimicParts.put(block, eater);
+            }
+        } else if (part instanceof MimicChestEater) {
+            MimicChestEater eater = (MimicChestEater) part;
+            if (eater.isOpen()) eater.closeChest(false);
+            else eater.openChest(false);
+        }
+
+        event.setCancelled(false);
+    }
 
     public void onBlockBreak(BlockBreakEvent event) {
         Block block = event.getBlock();
@@ -200,12 +201,10 @@ public class MimicChestService {
         return eater;
     }
 
-    // Sobrecarga del método createNewAttacker para aceptar solo un parámetro
     public MimicChestAttacker createNewAttacker(Block block) {
         return createNewAttacker(block, getCreatingParams(block));
     }
 
-    // Método createNewAttacker con dos parámetros
     public MimicChestAttacker createNewAttacker(Block block, Map<String, Object> params) {
         if (mimicParts.containsKey(block)) return null;
         MimicChestAttacker attacker = new MimicChestAttacker(this, block, params);
@@ -228,12 +227,62 @@ public class MimicChestService {
         return new HashMap<>();
     }
 
-    public static MimicChestService getInstance() {
-        return instance;
+    public MimicChestEater getEaterForPlayer(Player player) {
+        for (MimicChestPart part : mimicParts.values()) {
+            if (part instanceof MimicChestEater) {
+                MimicChestEater eater = (MimicChestEater) part;
+                if (eater.getEatenPlayer() == player) {
+                    return eater;
+                }
+            }
+        }
+        return null;
     }
 
-    public JavaPlugin getPlugin() {
-        // Proporciona una forma de obtener el plugin principal, asegúrate de implementarlo según tu estructura de proyecto
-        return JavaPlugin.getProvidingPlugin(getClass());
+    // Event listeners
+    public void onPlayerMove(PlayerMoveEvent event) {
+        MimicChestEater eater = getEaterForPlayer(event.getPlayer());
+        if (eater != null) {
+            eater.onPlayerMove(event);
+        }
+    }
+
+    public void onPlayerQuit(PlayerQuitEvent event) {
+        MimicChestEater eater = getEaterForPlayer(event.getPlayer());
+        if (eater != null) {
+            eater.onPlayerQuit(event);
+        }
+    }
+
+    public void onItemDrop(PlayerDropItemEvent event) {
+        MimicChestEater eater = getEaterForPlayer(event.getPlayer());
+        if (eater != null) {
+            eater.onItemDrop(event);
+        }
+    }
+
+    public void onPlayerAttack(EntityDamageByEntityEvent event) {
+        if (event.getDamager() instanceof Player) {
+            MimicChestEater eater = getEaterForPlayer((Player) event.getDamager());
+            if (eater != null) {
+                eater.onPlayerAttack(event);
+            }
+        }
+    }
+
+    public void onPlayerDeath(PlayerDeathEvent event) {
+        MimicChestEater eater = getEaterForPlayer(event.getEntity());
+        if (eater != null) {
+            eater.onPlayerDeath(event);
+        }
+    }
+
+    public void onInvClick(InventoryClickEvent event) {
+        if (event.getWhoClicked() instanceof Player) {
+            MimicChestEater eater = getEaterForPlayer((Player) event.getWhoClicked());
+            if (eater != null) {
+                eater.onInvClick(event);
+            }
+        }
     }
 }
