@@ -68,6 +68,9 @@ public class MimicChestService {
 
         if (part instanceof MimicChestIdle) {
             if (action == Action.RIGHT_CLICK_BLOCK) {
+                // Remove the old hologram
+                part.removeHologram();
+
                 MimicChestEater eater = new MimicChestEater(this, block, event.getPlayer(), new Timer(), null);
                 mimicParts.put(block, eater);
             }
@@ -230,14 +233,20 @@ public class MimicChestService {
     public Map<String, Object> getCreatingParams(Block block) {
         if (!MimicUtils.chestTypes.contains(block.getType())) return new HashMap<>();
         if (!((Chest) block.getState()).getInventory().getViewers().isEmpty() &&
-                ((Chest) block.getState()).getInventory().getViewers().get(0).getOpenInventory().getTitle().startsWith(mimicChestName)) return new HashMap<>();
-        String[] nameParts = ((Chest) block.getState()).getInventory().getViewers().get(0).getOpenInventory().getTitle().split(" ");
-        if (nameParts.length == 1) return new HashMap<>();
-        String jsonString = nameParts[1];
-        try {
-            return new JSONObject(jsonString).toMap();
-        } catch (Exception e) {
-            System.out.println("Can't parse mimic params [" + block.getX() + ":" + block.getY() + ":" + block.getZ() + "]");
+                ((Chest) block.getState()).getInventory().getViewers().get(0).getOpenInventory().getTitle().startsWith(mimicChestName)) {
+            return new HashMap<>();
+        } else {
+            String[] nameParts = ((Chest) block.getState()).getInventory().getViewers().get(0).getOpenInventory().getTitle().split(" ");
+            if (nameParts.length == 1) {
+                return new HashMap<>();
+            } else {
+                String jsonString = nameParts[1];
+                try {
+                    return new JSONObject(jsonString).toMap();
+                } catch (Exception e) {
+                    System.out.println("Can't parse mimic params [" + block.getX() + ":" + block.getY() + ":" + block.getZ() + "]");
+                }
+            }
         }
         return new HashMap<>();
     }
@@ -300,5 +309,24 @@ public class MimicChestService {
             }
         }
     }
-}
 
+     public void changeToIdle(Block block) {
+        if (mimicParts.containsKey(block)) {
+            MimicChestPart part = mimicParts.get(block);
+            if (part instanceof MimicChestEater) {
+                part.removeHologram();
+                mimicParts.put(block, new MimicChestIdle(this, block));
+            }
+        }
+    }
+
+    public void changeToAttacker(Block block) {
+        if (mimicParts.containsKey(block)) {
+            MimicChestPart part = mimicParts.get(block);
+            if (part instanceof MimicChestEater) {
+                part.removeHologram();
+                mimicParts.put(block, createNewAttacker(block));
+            }
+        }
+    }
+}

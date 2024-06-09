@@ -18,12 +18,18 @@ public class MimicDebugCommand implements CommandExecutor {
         if (args.length != 1) {
             sender.sendMessage(ChatColor.RED + "Usage: /mimicdebug <true|false>");
             return false;
+        } else {
+            if(args[0].equalsIgnoreCase("true")) {
+                plugin.setDebugMode(true);
+                sender.sendMessage(ChatColor.GREEN + "Debug mode enabled");
+            } else if(args[0].equalsIgnoreCase("false")) {
+                plugin.setDebugMode(false);
+                sender.sendMessage(ChatColor.GREEN + "Debug mode disabled");
+            } else {
+                sender.sendMessage(ChatColor.RED + "Usage: /mimicdebug <true|false>");
+                return false;
+            }
         }
-
-        boolean debugMode = Boolean.parseBoolean(args[0]);
-        plugin.setDebugMode(debugMode);
-
-        sender.sendMessage(ChatColor.GREEN + "Mimic debug mode set to " + debugMode);
         return true;
     }
 }

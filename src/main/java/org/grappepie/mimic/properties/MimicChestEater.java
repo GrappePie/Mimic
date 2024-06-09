@@ -28,7 +28,6 @@ public class MimicChestEater extends MimicChestPart {
     private TimerTask eaterProcess;
     private boolean isOpen = false;
     private double eatItemChance = 0.5;
-    private TimerTask reachAreaTask;
 
     private Player eatenPlayer;
     private GameMode eatenPlayerGameMode;
@@ -84,23 +83,12 @@ public class MimicChestEater extends MimicChestPart {
         startListeners();
     }
 
-    private void startListeners() {
-        // Implementar listeners de eventos aquí
-    }
-
     public Player getEatenPlayer() {
         return eatenPlayer;
     }
 
-    public void eatPlayer(Player player) {
-        eatenPlayer = player;
-        eatenPlayerGameMode = player.getGameMode();
-        player.teleport(teleportLocation);
-        player.addPotionEffect(new PotionEffect(PotionEffectType.INVISIBILITY, Integer.MAX_VALUE, 1));
-        MimicUtils.sendFakePlayerEquipment(player, getPlayerHead());
-        player.setGameMode(GameMode.ADVENTURE);
-        eatenPlayerAllowedFly = player.getAllowFlight();
-        player.setAllowFlight(true);
+    private void startListeners() {
+        // Implementar listeners de eventos aquí
     }
 
     private void eatPlayerItem() {
@@ -128,9 +116,6 @@ public class MimicChestEater extends MimicChestPart {
         } else if (slot == -2) {
             itemStack = eatenPlayer.getInventory().getLeggings();
             eatenPlayer.getInventory().setLeggings(null);
-        } else if (slot == -1) {
-            itemStack = eatenPlayer.getInventory().getBoots();
-            eatenPlayer.getInventory().setBoots(null);
         } else {
             itemStack = contents[slot];
             inv.setItem(slot, null);
@@ -190,16 +175,40 @@ public class MimicChestEater extends MimicChestPart {
         event.getDrops().clear();
         items.forEach(this::eatItem);
         ItemStack skull = new ItemStack(Material.PLAYER_HEAD);
+        SkullMeta meta = (SkullMeta) skull.getItemMeta();
+        meta.setOwningPlayer(eatenPlayer);
+        skull.setItemMeta(meta);
         barfEntity(block.getWorld().dropItem(block.getLocation(), skull));
+
+        // Cancelar el temporizador eaterProcess
+        eaterProcess.cancel();
+
+        service.changeToIdle(block);
+
+        releasePlayer();
 
         // Comprobar jugadores cercanos
         List<Player> nearbyPlayers = checkNearbyPlayers();
-        if (nearbyPlayers.isEmpty()) {
-            MimicChestIdle idle = new MimicChestIdle(service, block);
-            service.addMimic(block, idle);
-        } else {
-            Player nextPlayer = nearbyPlayers.get(0);
-            eatPlayer(nextPlayer);
+        Bukkit.getScheduler().runTask(service.getPlugin(), () -> {
+            if (nearbyPlayers.isEmpty()) {
+                MimicChestIdle idle = new MimicChestIdle(service, block);
+                service.addMimic(block, idle);
+            } else {
+                Player nextPlayer = nearbyPlayers.get(0);
+                eatPlayer(nextPlayer);
+            }
+        });
+    }
+
+    private void releasePlayer() {
+        if (eatenPlayer != null) {
+            eatenPlayer.setAllowFlight(eatenPlayerAllowedFly);
+            eatenPlayer.setGameMode(eatenPlayerGameMode);
+            for (PotionEffect effect : eatenPlayer.getActivePotionEffects()) {
+                eatenPlayer.removePotionEffect(effect.getType());
+            }
+            MimicUtils.sendRealPlayerEquipment(eatenPlayer);
+            eatenPlayer = null;
         }
     }
 
@@ -340,35 +349,7 @@ public class MimicChestEater extends MimicChestPart {
             eatenPlayer = null;
         }
         removeHologram();
-    }
-
-    @Override
-    protected void showReachArea() {
-        reachAreaTask = new TimerTask() {
-            @Override
-            public void run() {
-                Bukkit.getScheduler().runTask(service.getPlugin(), () -> {
-                    double radius = 5.0;
-                    Location center = block.getLocation().add(0.5, 1.5, 0.5);
-
-                    for (double angle = 0; angle < 360; angle += 10) {
-                        double x = radius * Math.cos(Math.toRadians(angle));
-                        double z = radius * Math.sin(Math.toRadians(angle));
-                        Location particleLocation = center.clone().add(x, 0, z);
-                        center.getWorld().spawnParticle(Particle.VILLAGER_HAPPY, particleLocation, 1, 0, 0, 0, 0);
-                    }
-                });
-            }
-        };
-        eatingTimer.schedule(reachAreaTask, 0, 20 * 5); // Repite cada 5 segundos
-    }
-
-    @Override
-    protected void removeReachArea() {
-        if (reachAreaTask != null) {
-            reachAreaTask.cancel();
-            reachAreaTask = null;
-        }
+        removeReachArea();
     }
 
     @Override
@@ -378,5 +359,25 @@ public class MimicChestEater extends MimicChestPart {
             this.onDestroy(true);
         }
     }
-}
 
+    public void eatPlayer(Player player) {
+        this.eatenPlayer = player;
+        this.eatenPlayerGameMode = player.getGameMode();
+        player.teleport(teleportLocation);
+        player.addPotionEffect(new PotionEffect(PotionEffectType.INVISIBILITY, Integer.MAX_VALUE, 1));
+        MimicUtils.sendFakePlayerEquipment(player, getPlayerHead());
+        player.setGameMode(GameMode.ADVENTURE);
+        this.eatenPlayerAllowedFly = player.getAllowFlight();
+        player.setAllowFlight(true);
+    }
+
+    @Override
+    public void showReachArea() {
+        // Implement logic to show reach area
+    }
+
+    @Override
+    public void removeReachArea() {
+        // Implement logic to remove reach area
+    }
+}
