@@ -1,0 +1,10 @@
+name: Mimic
+version: '${project.version}'
+main: org.grappepie.mimic.Mimic
+api-version: '1.20'
+
+commands:
+  spawnmimic:
+    description: Spawns a mimic chest
+    usage: /<command>
+    permission: mimic.command
