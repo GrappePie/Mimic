@@ -12,6 +12,7 @@ public abstract class MimicChestPart {
     protected final MimicChestService service;
     protected MimicStateHologram hologram;
     protected MimicState state; // Agregar este campo
+    protected boolean debugMode = false;
     Double health;
 
     public MimicChestPart(MimicChestService service, Block block) {
@@ -63,4 +64,16 @@ public abstract class MimicChestPart {
     public final boolean isDestroyed() {
         return destroyed;
     }
+    public void updateDebugMode(boolean debugMode) {
+        this.debugMode = debugMode;
+        if (debugMode) {
+            showReachArea();
+        } else {
+            removeReachArea();
+        }
+    }
+
+    protected abstract void showReachArea();
+
+    protected abstract void removeReachArea();
 }

@@ -1,6 +1,8 @@
 package org.grappepie.mimic.properties;
 
-import org.bukkit.*;
+import org.bukkit.ChatColor;
+import org.bukkit.GameMode;
+import org.bukkit.Material;
 import org.bukkit.block.Block;
 import org.bukkit.block.Chest;
 import org.bukkit.entity.Player;
@@ -17,12 +19,16 @@ import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.json.JSONObject;
 
-import java.util.*;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Timer;
 
 public class MimicChestService {
     private static MimicChestService instance;
     private final String mimicChestName = ChatColor.translateAlternateColorCodes('&', "&eMimic");
     private final Map<Block, MimicChestPart> mimicParts = new HashMap<>();
+    private boolean debugMode = false;
 
     public MimicChestService() {
         instance = this;
@@ -34,6 +40,13 @@ public class MimicChestService {
 
     public JavaPlugin getPlugin() {
         return JavaPlugin.getProvidingPlugin(getClass());
+    }
+
+    public void updateDebugMode(boolean debugMode) {
+        this.debugMode = debugMode;
+        for (MimicChestPart part : mimicParts.values()) {
+            part.updateDebugMode(debugMode);
+        }
     }
 
     public void onPlayerInteract(PlayerInteractEvent event) {
@@ -197,6 +210,7 @@ public class MimicChestService {
     public MimicChestEater createNewEater(Block block, Player player, Double health) {
         if (mimicParts.containsKey(block)) return null;
         MimicChestEater eater = new MimicChestEater(this, block, player, new Timer(), health);
+        eater.updateDebugMode(debugMode);
         mimicParts.put(block, eater);
         return eater;
     }
@@ -208,6 +222,7 @@ public class MimicChestService {
     public MimicChestAttacker createNewAttacker(Block block, Map<String, Object> params) {
         if (mimicParts.containsKey(block)) return null;
         MimicChestAttacker attacker = new MimicChestAttacker(this, block, params);
+        attacker.updateDebugMode(debugMode);
         mimicParts.put(block, attacker);
         return attacker;
     }
@@ -286,3 +301,4 @@ public class MimicChestService {
         }
     }
 }
+

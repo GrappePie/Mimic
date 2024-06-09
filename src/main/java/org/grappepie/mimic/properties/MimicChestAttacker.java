@@ -18,6 +18,7 @@ public class MimicChestAttacker extends MimicChestPart {
     private final boolean displayAttackZone;
     private final int maxAttackDelay;
     private int attackDelay;
+    private TimerTask reachAreaTask;
 
     public MimicChestAttacker(MimicChestService service, Block block, Map<String, Object> params) {
         super(service, block);
@@ -32,7 +33,7 @@ public class MimicChestAttacker extends MimicChestPart {
         this.attackLocation = block.getLocation().add(0.5, 1.2, 0.5);
         this.mount.getWorld().playSound(mount, Sound.ENTITY_GHAST_SCREAM, 2, 1);
 
-        this.state = MimicState.ATTACKER; // Agregar esta línea
+        updateHologram("Attacker");
 
         if (displayAttackZone) {
             displayAttackZone();
@@ -45,8 +46,6 @@ public class MimicChestAttacker extends MimicChestPart {
                 attack();
             }
         }, 20, 20);
-
-        updateHologram("Attacker"); // Agregar esta línea
     }
 
     private void displayAttackZone() {
@@ -106,7 +105,8 @@ public class MimicChestAttacker extends MimicChestPart {
         if (attackTimer != null) {
             attackTimer.cancel();
         }
-        removeHologram(); // Agregar esta línea
+        removeHologram();
+        removeReachArea();
     }
 
     @Override
@@ -114,6 +114,35 @@ public class MimicChestAttacker extends MimicChestPart {
         this.health -= damage;
         if (this.health <= 0) {
             this.onDestroy(true);
+        }
+    }
+
+    @Override
+    protected void showReachArea() {
+        reachAreaTask = new TimerTask() {
+            @Override
+            public void run() {
+                Bukkit.getScheduler().runTask(service.getPlugin(), () -> {
+                    double radius = scanRadius;
+                    Location center = block.getLocation().add(0.5, 1.5, 0.5);
+
+                    for (double angle = 0; angle < 360; angle += 10) {
+                        double x = radius * Math.cos(Math.toRadians(angle));
+                        double z = radius * Math.sin(Math.toRadians(angle));
+                        Location particleLocation = center.clone().add(x, 0, z);
+                        center.getWorld().spawnParticle(Particle.VILLAGER_HAPPY, particleLocation, 1, 0, 0, 0, 0);
+                    }
+                });
+            }
+        };
+        attackTimer.schedule(reachAreaTask, 0, 20 * 5); // Repite cada 5 segundos
+    }
+
+    @Override
+    protected void removeReachArea() {
+        if (reachAreaTask != null) {
+            reachAreaTask.cancel();
+            reachAreaTask = null;
         }
     }
 }

@@ -3,6 +3,7 @@ package org.grappepie.mimic.listeners;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockState;
+import org.bukkit.block.Chest;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.BlockBreakEvent;
@@ -27,7 +28,7 @@ public class MimicChestListener implements Listener {
         // Iterate over all block states in the chunk and replace some dungeon chests with Mimic chests
         for (BlockState blockState : event.getChunk().getTileEntities()) {
             Block block = blockState.getBlock();
-            if (block.getType() == Material.CHEST) {
+            if (block.getType() == Material.CHEST && isDungeonChest((Chest) blockState)) {
                 if (shouldBeMimicChest()) {
                     mimicChestService.createNewEater(block, null, null);
                 }
@@ -48,6 +49,12 @@ public class MimicChestListener implements Listener {
             part.onDestroy(true);
             mimicChestService.destroyMimic(block, true);
         }
+    }
+
+    private boolean isDungeonChest(Chest chest) {
+        // Implement your logic to determine if this chest is part of a dungeon
+        // For example, you might check the surrounding blocks for dungeon features
+        return true; // Placeholder logic
     }
 
     private boolean shouldBeMimicChest() {

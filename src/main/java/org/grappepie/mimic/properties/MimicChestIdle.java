@@ -21,4 +21,14 @@ public class MimicChestIdle extends MimicChestPart {
         destroyed = true;
         removeHologram();
     }
+
+    @Override
+    protected void showReachArea() {
+        // Lógica para mostrar el área de alcance (si aplica)
+    }
+
+    @Override
+    protected void removeReachArea() {
+        // Lógica para eliminar el área de alcance (si aplica)
+    }
 }
