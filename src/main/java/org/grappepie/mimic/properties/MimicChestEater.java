@@ -30,7 +30,6 @@ public class MimicChestEater extends MimicChestPart {
     private double eatItemChance = 0.5;
 
     private Player eatenPlayer;
-    private GameMode eatenPlayerGameMode;
     private boolean eatenPlayerAllowedFly;
 
     public MimicChestEater(MimicChestService service, Block block, Player awakener, Timer workspace, Double health) {
@@ -56,11 +55,9 @@ public class MimicChestEater extends MimicChestPart {
         }, 2 * 50);
 
         if (eatenPlayer != null) {
-            eatenPlayerGameMode = awakener.getGameMode();
             awakener.teleport(teleportLocation);
             awakener.addPotionEffect(new PotionEffect(PotionEffectType.INVISIBILITY, Integer.MAX_VALUE, 1));
             MimicUtils.sendFakePlayerEquipment(awakener, getPlayerHead());
-            awakener.setGameMode(GameMode.ADVENTURE);
             eatenPlayerAllowedFly = awakener.getAllowFlight();
             awakener.setAllowFlight(true);
         }
@@ -70,7 +67,7 @@ public class MimicChestEater extends MimicChestPart {
             public void run() {
                 if (eatenPlayer != null) {
                     Bukkit.getScheduler().runTask(service.getPlugin(), () -> {
-                        awakener.damage(0.5);
+                        awakener.damage(1);
                         if (Math.random() < eatItemChance) {
                             eatPlayerItem();
                         }
@@ -183,9 +180,9 @@ public class MimicChestEater extends MimicChestPart {
         // Cancelar el temporizador eaterProcess
         eaterProcess.cancel();
 
-        service.changeToIdle(block);
+        releasePlayer(); // Asegurarse de liberar al jugador antes de cambiar a idle
 
-        releasePlayer();
+        service.changeToIdle(block);
 
         // Comprobar jugadores cercanos
         List<Player> nearbyPlayers = checkNearbyPlayers();
@@ -203,7 +200,6 @@ public class MimicChestEater extends MimicChestPart {
     private void releasePlayer() {
         if (eatenPlayer != null) {
             eatenPlayer.setAllowFlight(eatenPlayerAllowedFly);
-            eatenPlayer.setGameMode(eatenPlayerGameMode);
             for (PotionEffect effect : eatenPlayer.getActivePotionEffects()) {
                 eatenPlayer.removePotionEffect(effect.getType());
             }
@@ -341,7 +337,6 @@ public class MimicChestEater extends MimicChestPart {
         if (eatenPlayer != null) {
             barfEntity(eatenPlayer);
             eatenPlayer.setAllowFlight(eatenPlayerAllowedFly);
-            eatenPlayer.setGameMode(eatenPlayerGameMode);
             for (PotionEffect effect : eatenPlayer.getActivePotionEffects()) {
                 eatenPlayer.removePotionEffect(effect.getType());
             }
@@ -362,11 +357,9 @@ public class MimicChestEater extends MimicChestPart {
 
     public void eatPlayer(Player player) {
         this.eatenPlayer = player;
-        this.eatenPlayerGameMode = player.getGameMode();
         player.teleport(teleportLocation);
         player.addPotionEffect(new PotionEffect(PotionEffectType.INVISIBILITY, Integer.MAX_VALUE, 1));
         MimicUtils.sendFakePlayerEquipment(player, getPlayerHead());
-        player.setGameMode(GameMode.ADVENTURE);
         this.eatenPlayerAllowedFly = player.getAllowFlight();
         player.setAllowFlight(true);
     }

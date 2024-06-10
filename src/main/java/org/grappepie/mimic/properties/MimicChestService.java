@@ -1,5 +1,6 @@
 package org.grappepie.mimic.properties;
 
+import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.GameMode;
 import org.bukkit.Material;
@@ -50,6 +51,8 @@ public class MimicChestService {
     }
 
     public void onPlayerInteract(PlayerInteractEvent event) {
+        Bukkit.getConsoleSender().sendMessage("Player interacted with " + event.getClickedBlock() + " with action " + event.getAction());
+        Bukkit.getConsoleSender().sendMessage("Mimic part: " + mimicParts.get(event.getClickedBlock()));
         if (event.getClickedBlock() == null) return;
         if (!(event.getPlayer().getGameMode() == GameMode.ADVENTURE || event.getPlayer().getGameMode() == GameMode.SURVIVAL)) return;
         Block block = event.getClickedBlock();
@@ -59,12 +62,11 @@ public class MimicChestService {
         Action action = event.getAction();
         event.setCancelled(true);
 
-        if (!mimicParts.containsKey(block) || mimicParts.get(block).isDestroyed()) {
-            MimicChestPart part = new MimicChestIdle(this, block);
+        MimicChestPart part = mimicParts.get(block);
+        if (part == null || part.isDestroyed()) {
+            part = new MimicChestIdle(this, block);
             mimicParts.put(block, part);
         }
-
-        MimicChestPart part = mimicParts.get(block);
 
         if (part instanceof MimicChestIdle) {
             if (action == Action.RIGHT_CLICK_BLOCK) {
@@ -105,10 +107,15 @@ public class MimicChestService {
         if (part instanceof MimicChestEater) {
             part.onDestroy(true);
         }
+        if (part instanceof MimicChestIdle) {
+            part.onDestroy(true);
+        }
         MimicChestAttacker attacker = createNewAttacker(block);
-        mimicParts.put(block, attacker);
-        if (part != null && part.getHealth() != null) {
-            attacker.setHealth(part.getHealth());
+        if (attacker != null) {
+            mimicParts.put(block, attacker);
+            if (part != null && part.getHealth() != null) {
+                attacker.setHealth(part.getHealth());
+            }
         }
     }
 
@@ -236,7 +243,12 @@ public class MimicChestService {
                 ((Chest) block.getState()).getInventory().getViewers().get(0).getOpenInventory().getTitle().startsWith(mimicChestName)) {
             return new HashMap<>();
         } else {
-            String[] nameParts = ((Chest) block.getState()).getInventory().getViewers().get(0).getOpenInventory().getTitle().split(" ");
+            Chest chest = (Chest) block.getState();
+            String customName = chest.getCustomName();
+            if (customName == null || customName.isEmpty()) {
+                return new HashMap<>();
+            }
+            String[] nameParts = customName.split(" ");
             if (nameParts.length == 1) {
                 return new HashMap<>();
             } else {
@@ -310,7 +322,7 @@ public class MimicChestService {
         }
     }
 
-     public void changeToIdle(Block block) {
+    public void changeToIdle(Block block) {
         if (mimicParts.containsKey(block)) {
             MimicChestPart part = mimicParts.get(block);
             if (part instanceof MimicChestEater) {

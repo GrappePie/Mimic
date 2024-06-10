@@ -2,12 +2,19 @@ package org.grappepie.mimic.properties;
 
 import org.bukkit.*;
 import org.bukkit.block.Block;
-import org.bukkit.entity.Firework;
+import org.bukkit.block.BlockFace;
+import org.bukkit.block.Chest;
+import org.bukkit.block.data.Directional;
+import org.bukkit.entity.*;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.FireworkMeta;
+import org.bukkit.inventory.meta.PotionMeta;
+import org.bukkit.potion.PotionEffect;
+import org.bukkit.potion.PotionEffectType;
 import org.bukkit.util.Vector;
 
 import java.util.*;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
 
 public class MimicChestAttacker extends MimicChestPart {
@@ -19,6 +26,7 @@ public class MimicChestAttacker extends MimicChestPart {
     private final int maxAttackDelay;
     private int attackDelay;
     private TimerTask reachAreaTask;
+    private long lastAttackTime;
 
     public MimicChestAttacker(MimicChestService service, Block block, Map<String, Object> params) {
         super(service, block);
@@ -31,7 +39,8 @@ public class MimicChestAttacker extends MimicChestPart {
 
         this.attackDelay = maxAttackDelay;
         this.attackLocation = block.getLocation().add(0.5, 1.2, 0.5);
-        this.mount.getWorld().playSound(mount, Sound.ENTITY_GHAST_SCREAM, 2, 1);
+        this.lastAttackTime = System.currentTimeMillis();
+        Bukkit.getScheduler().runTask(service.getPlugin(), () -> block.getWorld().playSound(block.getLocation(), Sound.ENTITY_GHAST_SCREAM, 2, 1));
 
         updateHologram("Attacker");
 
@@ -43,7 +52,7 @@ public class MimicChestAttacker extends MimicChestPart {
         attackTimer.schedule(new TimerTask() {
             @Override
             public void run() {
-                attack();
+                Bukkit.getScheduler().runTask(service.getPlugin(), () -> attack());
             }
         }, 20, 20);
     }
@@ -53,53 +62,232 @@ public class MimicChestAttacker extends MimicChestPart {
     }
 
     private void attack() {
-        // Implementar lógica de ataque
-    }
-
-    public void openChest(boolean silent) {
-        MimicUtils.openChest(block, silent);
-    }
-
-    public void closeChest(boolean silent) {
-        MimicUtils.closeChest(block, silent);
-    }
-
-    private void playDeathEffect(List<ItemStack> items) {
-        Firework firework = mount.getWorld().spawn(mount, Firework.class);
-        FireworkMeta fwMeta = firework.getFireworkMeta();
-        Random random = new Random();
-        for (int i = 0; i < 5; i++) {
-            FireworkEffect.Builder effectBuilder = FireworkEffect.builder();
-            effectBuilder.flicker(random.nextBoolean());
-            effectBuilder.trail(random.nextBoolean());
-            effectBuilder.withColor(Color.fromRGB(random.nextInt(255), random.nextInt(255), random.nextInt(255)));
-            fwMeta.addEffect(effectBuilder.build());
+        long currentTime = System.currentTimeMillis();
+        if (currentTime - lastAttackTime < attackDelay * 50) {
+            return; // No hacer nada si no ha pasado suficiente tiempo desde el último ataque
         }
-        fwMeta.setPower(2);
-        firework.setFireworkMeta(fwMeta);
-        new Timer().schedule(new TimerTask() {
-            @Override
-            public void run() {
-                firework.detonate();
-                Location loc = firework.getLocation();
-                for (ItemStack item : items) {
-                    loc.getWorld().dropItem(loc, item).setVelocity(Vector.getRandom().multiply(0.3));
+
+        lastAttackTime = currentTime; // Actualizar el tiempo del último ataque
+        List<Player> playersAroundChest = getNearbyPlayers(5);
+
+        if (!playersAroundChest.isEmpty()) {
+            int rnd = ThreadLocalRandom.current().nextInt(5);
+            switch (rnd) {
+                case 0:
+                    attackBarfZombie();
+                    break;
+                case 1:
+                    attackLaunchFireball(playersAroundChest.get(ThreadLocalRandom.current().nextInt(playersAroundChest.size())));
+                    break;
+                case 2:
+                    attackFlameThrower(playersAroundChest.get(ThreadLocalRandom.current().nextInt(playersAroundChest.size())));
+                    break;
+                case 3:
+                    attackTongue(playersAroundChest.get(ThreadLocalRandom.current().nextInt(playersAroundChest.size())));
+                    break;
+                case 4:
+                    attackShulker(2);
+                    break;
+            }
+            return;
+        }
+
+        Player target = getRandomTarget();
+        if (target == null) {
+            return;
+        }
+
+        int rnd = ThreadLocalRandom.current().nextInt(6);
+        switch (rnd) {
+            case 0:
+                attackLaunchFireball(target);
+                break;
+            case 1:
+                attackBarfTNT(target);
+                break;
+            case 2:
+                attackLaunchArrow(target);
+                break;
+            case 3:
+                attackBarfZombie();
+                break;
+            case 4:
+                attackTongue(target);
+                break;
+            case 5:
+                attackShulker(5);
+                break;
+        }
+    }
+
+    private void attackBarfZombie() {
+        if (getNearbyEntities(Zombie.class, 2).size() >= 2) {
+            return;
+        }
+        Zombie zombie = (Zombie) attackLocation.getWorld().spawnEntity(attackLocation, EntityType.ZOMBIE);
+        zombie.setAge(-24000);
+        zombie.setCanPickupItems(false);
+        zombie.getEquipment().setHelmet(new ItemStack(Material.CHEST));
+        zombie.getEquipment().setHelmetDropChance(0);
+        // Girar la cabeza del zombie 180 grados
+        Location loc = zombie.getLocation();
+        loc.setYaw(loc.getYaw() + 180);
+        zombie.teleport(loc);
+        barfEntity(zombie, 0.7);
+    }
+
+    private void attackLaunchFireball(Player target) {
+        openChest(false);
+        Bukkit.getScheduler().runTaskLater(service.getPlugin(), () -> {
+            closeChest(false);
+            Fireball fireball = attackLocation.getWorld().spawn(attackLocation, Fireball.class);
+            fireball.setDirection(target.getLocation().subtract(attackLocation).toVector());
+        }, 5);
+    }
+
+    private void attackFlameThrower(Player player) {
+        openChest(false);
+        Bukkit.getScheduler().runTaskLater(service.getPlugin(), () -> {
+            closeChest(false);
+            Location loc = player.getEyeLocation().add(player.getLocation()).multiply(0.5);
+            Vector vector = loc.toVector().subtract(attackLocation.toVector()).normalize();
+            for (double i = 0; i < 5; i += 0.4) {
+                Location particleLoc = attackLocation.clone().add(vector.clone().multiply(i));
+                attackLocation.getWorld().spawnParticle(Particle.FLAME, particleLoc, 0, 0.3, 0.3, 0.3, 0);
+                if (getNearbyPlayers(particleLoc, 1.2).contains(player)) {
+                    player.setFireTicks(200);
                 }
             }
-        }, 20);
+        }, 5);
+    }
+
+    private void attackTongue(Player player) {
+        openChest(false);
+        Bukkit.getScheduler().runTaskLater(service.getPlugin(), () -> {
+            closeChest(false);
+            Location currentLoc = attackLocation.clone();
+            List<Location> tongueLocations = new ArrayList<>();
+            while (currentLoc.distance(player.getLocation()) > 1.5) {
+                Vector vector = player.getLocation().subtract(currentLoc).toVector().normalize().multiply(0.3);
+                currentLoc.add(vector);
+                tongueLocations.add(currentLoc.clone());
+                attackLocation.getWorld().spawnParticle(Particle.REDSTONE, currentLoc, 1, 1, 0.5, 0, 1);
+            }
+            player.teleport(tongueLocations.get(tongueLocations.size() - 1));
+            eatPlayer(player);
+        }, 5);
+    }
+
+    private void attackShulker(int bulletCount) {
+        openChest(false);
+        Bukkit.getScheduler().runTaskLater(service.getPlugin(), () -> {
+            closeChest(false);
+            for (int i = 0; i < bulletCount; i++) {
+                Player target = getRandomTarget();
+                if (target != null) {
+                    ShulkerBullet bullet = attackLocation.getWorld().spawn(attackLocation, ShulkerBullet.class);
+                    bullet.setTarget(target);
+                }
+            }
+        }, 5);
+    }
+
+    private void attackBarfTNT(Player target) {
+        openChest(false);
+        Bukkit.getScheduler().runTaskLater(service.getPlugin(), () -> {
+            closeChest(false);
+            TNTPrimed tnt = attackLocation.getWorld().spawn(attackLocation, TNTPrimed.class);
+            tnt.setIsIncendiary(true);
+            tnt.setFuseTicks(40);
+            tnt.setVelocity(target.getLocation().subtract(attackLocation).toVector().normalize().multiply(0.7));
+        }, 5);
+    }
+
+    private void attackLaunchArrow(Player target) {
+        openChest(false);
+        Bukkit.getScheduler().runTaskLater(service.getPlugin(), () -> {
+            closeChest(false);
+            Arrow arrow = attackLocation.getWorld().spawn(attackLocation, Arrow.class);
+            arrow.setVelocity(target.getLocation().subtract(attackLocation).toVector().normalize().multiply(0.6));
+        }, 5);
+    }
+
+    private void barfEntity(Entity entity, double power) {
+        if (entity == null) {
+            return;
+        }
+        entity.teleport(attackLocation);
+        openChest(true);
+        Bukkit.getScheduler().runTaskLater(service.getPlugin(), () -> {
+            playBurpSound(attackLocation);
+            entity.setVelocity(getBarfVector().multiply(power));
+            closeChest(true);
+        }, 5);
+    }
+
+    private List<Player> getNearbyPlayers(double radius) {
+        return block.getWorld().getPlayers().stream()
+                .filter(player -> player.getLocation().distance(block.getLocation()) <= radius)
+                .collect(Collectors.toList());
+    }
+
+    private List<Player> getNearbyPlayers(Location location, double radius) {
+        return location.getWorld().getPlayers().stream()
+                .filter(player -> player.getLocation().distance(location) <= radius)
+                .collect(Collectors.toList());
+    }
+
+    private List<LivingEntity> getNearbyEntities(Class<? extends LivingEntity> entityClass, double radius) {
+        return block.getWorld().getLivingEntities().stream()
+                .filter(entity -> entityClass.isInstance(entity) && entity.getLocation().distance(block.getLocation()) <= radius)
+                .collect(Collectors.toList());
+    }
+
+    private Player getRandomTarget() {
+        List<Player> players = getNearbyPlayers(scanRadius);
+        if (players.isEmpty()) {
+            return null;
+        }
+        return players.get(new Random().nextInt(players.size()));
+    }
+
+    private Vector getBarfVector() {
+        // Use the chest's direction to determine the barf vector
+        if (block.getState() instanceof Chest) {
+            Directional directional = (Directional) chest.getBlockData();
+            BlockFace facing = directional.getFacing();
+            switch (facing) {
+                case NORTH:
+                    return new Vector(0, 1, -1);
+                case SOUTH:
+                    return new Vector(0, 1, 1);
+                case WEST:
+                    return new Vector(-1, 1, 0);
+                case EAST:
+                    return new Vector(1, 1, 0);
+                default:
+                    return new Vector(0, 1, 0);
+            }
+        }
+        return new Vector(0, 1, 0);
+    }
+
+    private void playBurpSound(Location loc) {
+        loc.getWorld().playSound(loc, Sound.ENTITY_PLAYER_BURP, 1, 1);
     }
 
     @Override
     public void onDestroy(boolean becauseDestroyed) {
         destroyed = true;
         if (becauseDestroyed) {
-            mount.getWorld().playSound(mount, Sound.ENTITY_ZOMBIE_HORSE_DEATH, 1, 1);
-            List<ItemStack> items = Arrays.asList(chest.getInventory().getContents());
+            block.getWorld().playSound(block.getLocation(), Sound.ENTITY_ZOMBIE_HORSE_DEATH, 1, 1);
+            Chest chest = (Chest) block.getState();
+            List<ItemStack> items = new ArrayList<>(Arrays.asList(chest.getInventory().getContents()));
             chest.getInventory().clear();
-            items.remove(0);
+            if (!items.isEmpty()) items.remove(0);
             items = items.stream().filter(Objects::nonNull).collect(Collectors.toList());
             block.setType(Material.AIR);
-            mount.getWorld().createExplosion(mount, 2);
+            block.getWorld().createExplosion(block.getLocation(), 2);
             playDeathEffect(items);
         }
         if (attackTimer != null) {
@@ -144,5 +332,40 @@ public class MimicChestAttacker extends MimicChestPart {
             reachAreaTask.cancel();
             reachAreaTask = null;
         }
+    }
+
+    private void playDeathEffect(List<ItemStack> items) {
+        Firework firework = attackLocation.getWorld().spawn(attackLocation, Firework.class);
+        FireworkMeta fwMeta = firework.getFireworkMeta();
+        Random random = new Random();
+        for (int i = 0; i < 5; i++) {
+            FireworkEffect.Builder effectBuilder = FireworkEffect.builder();
+            effectBuilder.flicker(random.nextBoolean());
+            effectBuilder.trail(random.nextBoolean());
+            effectBuilder.withColor(Color.fromRGB(random.nextInt(255), random.nextInt(255), random.nextInt(255)));
+            fwMeta.addEffect(effectBuilder.build());
+        }
+        fwMeta.setPower(2);
+        firework.setFireworkMeta(fwMeta);
+        Bukkit.getScheduler().runTaskLater(service.getPlugin(), firework::detonate, 20);
+        Location loc = firework.getLocation();
+        for (ItemStack item : items) {
+            loc.getWorld().dropItem(loc, item).setVelocity(Vector.getRandom().multiply(0.3));
+        }
+    }
+
+    private void openChest(boolean silent) {
+        Bukkit.getScheduler().runTask(service.getPlugin(), () -> MimicUtils.openChest(block, silent));
+    }
+
+    private void closeChest(boolean silent) {
+        Bukkit.getScheduler().runTask(service.getPlugin(), () -> MimicUtils.closeChest(block, silent));
+    }
+
+    private void eatPlayer(Player player) {
+        Bukkit.getScheduler().runTask(service.getPlugin(), () -> {
+            MimicChestEater eater = new MimicChestEater(service, block, player, new Timer(), health);
+            service.addMimic(block, eater);
+        });
     }
 }

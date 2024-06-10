@@ -13,7 +13,13 @@ public class MimicChestIdle extends MimicChestPart {
     public void onDestroy(boolean becauseBroken) {
         if (becauseBroken) {
             MimicChestAttacker attacker = service.createNewAttacker(block);
-            service.addMimic(block, attacker);
+            if (attacker != null) {
+                service.addMimic(block, attacker);
+            } else {
+                // Si el atacante no se pudo crear, asegúrate de marcar el MimicIdle como destruido
+                destroyed = true;
+                removeHologram();
+            }
         } else {
             destroyed = true;
             removeHologram();
