@@ -49,7 +49,7 @@ public final class Mimic extends JavaPlugin {
         // Register event listeners here
         Bukkit.getPluginManager().registerEvents(new MimicChestListener(mimicChestService), this);
         Bukkit.getPluginManager().registerEvents(new MimicChestIdleListener(mimicChestService), this);
-        Bukkit.getPluginManager().registerEvents(new MimicChestEaterListener(mimicChestService), this);
-        Bukkit.getPluginManager().registerEvents(new MimicChestAttackerListener(mimicChestService), this);
+        //Bukkit.getPluginManager().registerEvents(new MimicChestEaterListener(mimicChestService), this);
+        //Bukkit.getPluginManager().registerEvents(new MimicChestAttackerListener(mimicChestService), this);
     }
 }

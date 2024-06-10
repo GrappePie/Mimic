@@ -14,6 +14,6 @@ public class MimicChestAttackerListener implements Listener {
 
     @EventHandler
     public void onPlayerAttack(EntityDamageByEntityEvent event) {
-        mimicChestService.onPlayerAttack(event);
+        //mimicChestService.onPlayerAttack(event);
     }
 }

@@ -19,31 +19,31 @@ public class MimicChestEaterListener implements Listener {
 
     @EventHandler
     public void onPlayerMove(PlayerMoveEvent event) {
-        mimicChestService.onPlayerMove(event);
+        //mimicChestService.onPlayerMove(event);
     }
 
     @EventHandler
     public void onPlayerQuit(PlayerQuitEvent event) {
-        mimicChestService.onPlayerQuit(event);
+        //mimicChestService.onPlayerQuit(event);
     }
 
     @EventHandler
     public void onItemDrop(PlayerDropItemEvent event) {
-        mimicChestService.onItemDrop(event);
+        //mimicChestService.onItemDrop(event);
     }
 
     @EventHandler
     public void onPlayerAttack(EntityDamageByEntityEvent event) {
-        mimicChestService.onPlayerAttack(event);
+        //mimicChestService.onPlayerAttack(event);
     }
 
     @EventHandler
     public void onPlayerDeath(PlayerDeathEvent event) {
-        mimicChestService.onPlayerDeath(event);
+        //mimicChestService.onPlayerDeath(event);
     }
 
     @EventHandler
     public void onInvClick(InventoryClickEvent event) {
-        mimicChestService.onInvClick(event);
+        //mimicChestService.onInvClick(event);
     }
 }

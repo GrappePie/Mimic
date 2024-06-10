@@ -10,7 +10,6 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.BlockExplodeEvent;
-import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityExplodeEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
@@ -51,8 +50,6 @@ public class MimicChestService {
     }
 
     public void onPlayerInteract(PlayerInteractEvent event) {
-        Bukkit.getConsoleSender().sendMessage("Player interacted with " + event.getClickedBlock() + " with action " + event.getAction());
-        Bukkit.getConsoleSender().sendMessage("Mimic part: " + mimicParts.get(event.getClickedBlock()));
         if (event.getClickedBlock() == null) return;
         if (!(event.getPlayer().getGameMode() == GameMode.ADVENTURE || event.getPlayer().getGameMode() == GameMode.SURVIVAL)) return;
         Block block = event.getClickedBlock();
@@ -273,53 +270,6 @@ public class MimicChestService {
             }
         }
         return null;
-    }
-
-    // Event listeners
-    public void onPlayerMove(PlayerMoveEvent event) {
-        MimicChestEater eater = getEaterForPlayer(event.getPlayer());
-        if (eater != null) {
-            eater.onPlayerMove(event);
-        }
-    }
-
-    public void onPlayerQuit(PlayerQuitEvent event) {
-        MimicChestEater eater = getEaterForPlayer(event.getPlayer());
-        if (eater != null) {
-            eater.onPlayerQuit(event);
-        }
-    }
-
-    public void onItemDrop(PlayerDropItemEvent event) {
-        MimicChestEater eater = getEaterForPlayer(event.getPlayer());
-        if (eater != null) {
-            eater.onItemDrop(event);
-        }
-    }
-
-    public void onPlayerAttack(EntityDamageByEntityEvent event) {
-        if (event.getDamager() instanceof Player) {
-            MimicChestEater eater = getEaterForPlayer((Player) event.getDamager());
-            if (eater != null) {
-                eater.onPlayerAttack(event);
-            }
-        }
-    }
-
-    public void onPlayerDeath(PlayerDeathEvent event) {
-        MimicChestEater eater = getEaterForPlayer(event.getEntity());
-        if (eater != null) {
-            eater.onPlayerDeath(event);
-        }
-    }
-
-    public void onInvClick(InventoryClickEvent event) {
-        if (event.getWhoClicked() instanceof Player) {
-            MimicChestEater eater = getEaterForPlayer((Player) event.getWhoClicked());
-            if (eater != null) {
-                eater.onInvClick(event);
-            }
-        }
     }
 
     public void changeToIdle(Block block) {

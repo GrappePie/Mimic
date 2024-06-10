@@ -7,6 +7,8 @@ import org.bukkit.block.Chest;
 import org.bukkit.block.data.Directional;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
@@ -85,7 +87,81 @@ public class MimicChestEater extends MimicChestPart {
     }
 
     private void startListeners() {
-        // Implementar listeners de eventos aquí
+        service.getPlugin().getServer().getPluginManager().registerEvents(new Listener() {
+            @EventHandler
+            public void onInventoryClick(InventoryClickEvent event) {
+                if (event.getWhoClicked() == eatenPlayer) {
+                    event.setCancelled(true);
+                }
+            }
+
+            @EventHandler
+            public void onPlayerMove(PlayerMoveEvent event) {
+                if (event.getPlayer() != eatenPlayer) return;
+                if (event instanceof PlayerTeleportEvent) {
+                    event.setCancelled(true);
+                    return;
+                }
+                Location from = event.getFrom();
+                Location to = event.getTo();
+                if (from.getX() != to.getX() || from.getY() != to.getY() || from.getZ() != to.getZ()) {
+                    event.setTo(from);
+                }
+            }
+
+            @EventHandler
+            public void onPlayerDeath(PlayerDeathEvent event) {
+                if (event.getEntity() != eatenPlayer) return;
+                List<ItemStack> items = new ArrayList<>(event.getDrops());
+                event.getDrops().clear();
+                items.forEach(MimicChestEater.this::eatItem);
+                ItemStack skull = new ItemStack(Material.PLAYER_HEAD);
+                SkullMeta meta = (SkullMeta) skull.getItemMeta();
+                meta.setOwningPlayer(eatenPlayer);
+                skull.setItemMeta(meta);
+                barfEntity(block.getWorld().dropItem(block.getLocation(), skull));
+
+                // Cancelar el temporizador eaterProcess
+                eaterProcess.cancel();
+
+                releasePlayer(); // Asegurarse de liberar al jugador antes de cambiar a idle
+
+                service.changeToIdle(block);
+
+                // Comprobar jugadores cercanos
+                List<Player> nearbyPlayers = checkNearbyPlayers();
+                Bukkit.getScheduler().runTask(service.getPlugin(), () -> {
+                    if (nearbyPlayers.isEmpty()) {
+                        MimicChestIdle idle = new MimicChestIdle(service, block);
+                        service.addMimic(block, idle);
+                    } else {
+                        Player nextPlayer = nearbyPlayers.get(0);
+                        eatPlayer(nextPlayer);
+                    }
+                });
+            }
+
+            @EventHandler
+            public void onPlayerQuit(PlayerQuitEvent event) {
+                if (event.getPlayer() != eatenPlayer) return;
+                Player player = eatenPlayer;
+                player.setHealth(0); // Llama a onPlayerDeath
+                eatenPlayer = null;
+            }
+
+            @EventHandler
+            public void onPlayerDrop(PlayerDropItemEvent event) {
+                if (event.getPlayer() != eatenPlayer) return;
+                eatItem(event.getItemDrop().getItemStack());
+                event.getItemDrop().remove();
+            }
+
+            @EventHandler
+            public void onEntityDamageByEntity(EntityDamageByEntityEvent event) {
+                if (event.getDamager() != eatenPlayer) return;
+                if (!isOpen) event.setCancelled(true);
+            }
+        }, service.getPlugin());
     }
 
     private void eatPlayerItem() {
@@ -147,56 +223,6 @@ public class MimicChestEater extends MimicChestPart {
         }, 0, 2 * 50);
     }
 
-    public void onInvClick(InventoryClickEvent event) {
-        if (eatenPlayer != null && event.getWhoClicked() == eatenPlayer) {
-            event.setCancelled(true);
-        }
-    }
-
-    public void onPlayerMove(PlayerMoveEvent event) {
-        if (event.getPlayer() != eatenPlayer) return;
-        if (event instanceof PlayerTeleportEvent) {
-            event.setCancelled(true);
-            return;
-        }
-        Location from = event.getFrom();
-        Location to = event.getTo();
-        if (from.getX() != to.getX() || from.getY() != to.getY() || from.getZ() != to.getZ()) {
-            event.setTo(from);
-        }
-    }
-
-    public void onPlayerDeath(PlayerDeathEvent event) {
-        if (event.getEntity() != eatenPlayer) return;
-        List<ItemStack> items = new ArrayList<>(event.getDrops());
-        event.getDrops().clear();
-        items.forEach(this::eatItem);
-        ItemStack skull = new ItemStack(Material.PLAYER_HEAD);
-        SkullMeta meta = (SkullMeta) skull.getItemMeta();
-        meta.setOwningPlayer(eatenPlayer);
-        skull.setItemMeta(meta);
-        barfEntity(block.getWorld().dropItem(block.getLocation(), skull));
-
-        // Cancelar el temporizador eaterProcess
-        eaterProcess.cancel();
-
-        releasePlayer(); // Asegurarse de liberar al jugador antes de cambiar a idle
-
-        service.changeToIdle(block);
-
-        // Comprobar jugadores cercanos
-        List<Player> nearbyPlayers = checkNearbyPlayers();
-        Bukkit.getScheduler().runTask(service.getPlugin(), () -> {
-            if (nearbyPlayers.isEmpty()) {
-                MimicChestIdle idle = new MimicChestIdle(service, block);
-                service.addMimic(block, idle);
-            } else {
-                Player nextPlayer = nearbyPlayers.get(0);
-                eatPlayer(nextPlayer);
-            }
-        });
-    }
-
     private void releasePlayer() {
         if (eatenPlayer != null) {
             eatenPlayer.setAllowFlight(eatenPlayerAllowedFly);
@@ -212,24 +238,6 @@ public class MimicChestEater extends MimicChestPart {
         return block.getWorld().getPlayers().stream()
                 .filter(player -> player.getLocation().distance(block.getLocation()) <= 5)
                 .collect(Collectors.toList());
-    }
-
-    public void onPlayerQuit(PlayerQuitEvent event) {
-        if (event.getPlayer() != eatenPlayer) return;
-        Player player = eatenPlayer;
-        player.setHealth(0); // Llama a onPlayerDeath
-        eatenPlayer = null;
-    }
-
-    public void onItemDrop(PlayerDropItemEvent event) {
-        if (event.getPlayer() != eatenPlayer) return;
-        eatItem(event.getItemDrop().getItemStack());
-        event.getItemDrop().remove();
-    }
-
-    public void onPlayerAttack(EntityDamageByEntityEvent event) {
-        if (event.getDamager() != eatenPlayer) return;
-        if (!isOpen) event.setCancelled(true);
     }
 
     private void eatItem(ItemStack itemStack) {

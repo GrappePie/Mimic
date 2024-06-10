@@ -11,7 +11,7 @@ public abstract class MimicChestPart {
     protected final Chest chest;
     protected final MimicChestService service;
     protected MimicStateHologram hologram;
-    protected MimicState state; // Agregar este campo
+    protected MimicState state;
     protected boolean debugMode = false;
     Double health;
 
@@ -41,11 +41,11 @@ public abstract class MimicChestPart {
         }
     }
 
-    public MimicState getState() { // Agregar este método
+    public MimicState getState() {
         return state;
     }
 
-    public void setState(MimicState state) { // Agregar este método
+    public void setState(MimicState state) {
         this.state = state;
     }
 
@@ -64,6 +64,7 @@ public abstract class MimicChestPart {
     public final boolean isDestroyed() {
         return destroyed;
     }
+
     public void updateDebugMode(boolean debugMode) {
         this.debugMode = debugMode;
         if (debugMode) {
