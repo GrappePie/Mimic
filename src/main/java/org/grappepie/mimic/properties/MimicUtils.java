@@ -6,6 +6,7 @@ import org.bukkit.Material;
 import org.bukkit.Sound;
 import org.bukkit.World;
 import org.bukkit.block.Block;
+import org.bukkit.block.Chest;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.util.Vector;
@@ -58,14 +59,14 @@ public class MimicUtils {
     }
 
     private static void playChestAnimation(Block block, boolean open) {
-        try {
-            Object blockPosition = BLOCK_POSITION_CONSTRUCTOR.newInstance(block.getX(), block.getY(), block.getZ());
-            Object nmsBlock = BLOCK_CLASS.getMethod("a", Material.class).invoke(null, block.getType());
-            Object packet = PACKET_PLAY_OUT_BLOCK_ACTION_CONSTRUCTOR.newInstance(blockPosition, nmsBlock, 1, open ? 1 : 0);
-            broadcastPacket(packet);
-        } catch (Exception e) {
-            e.printStackTrace();
+        if (!(block.getState() instanceof Chest)) return;
+        Chest chest = (Chest) block.getState();
+        if (open){
+            chest.open();
+        } else {
+            chest.close();
         }
+        chest.update(true);
     }
 
     private static void broadcastPacket(Object packet, Player... excludedPlayers) {
