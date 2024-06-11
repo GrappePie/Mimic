@@ -98,11 +98,17 @@ public class MimicChestService {
             return;
         }
         if (part instanceof MimicChestAttacker) {
-            part.onTakeDamage(1);
+            part.onTakeDamage(1); // Modificado aquí
             return;
         }
         if (part instanceof MimicChestEater) {
             part.onDestroy(true);
+            MimicChestAttacker attacker = createNewAttacker(block);
+            mimicParts.put(block, attacker);
+            if (part.getHealth() != null) {
+                attacker.setHealth(part.getHealth());
+            }
+            return;
         }
         if (part instanceof MimicChestIdle) {
             part.onDestroy(true);
@@ -128,6 +134,11 @@ public class MimicChestService {
                 return true;
             }
             if (part instanceof MimicChestAttacker) {
+                // Check if the entity that caused the explosion is the Mimic
+                if (event.getEntity() == part) {
+                    // If it is, don't destroy the block
+                    return false;
+                }
                 part.onTakeDamage(1);
                 return true;
             }

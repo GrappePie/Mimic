@@ -8,6 +8,7 @@ import org.bukkit.block.data.Directional;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
+import org.bukkit.event.HandlerList;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
@@ -33,6 +34,7 @@ public class MimicChestEater extends MimicChestPart {
 
     private Player eatenPlayer;
     private boolean eatenPlayerAllowedFly;
+    private Listener mimicListener;
 
     public MimicChestEater(MimicChestService service, Block block, Player awakener, Timer workspace, Double health) {
         super(service, block);
@@ -41,7 +43,6 @@ public class MimicChestEater extends MimicChestPart {
         this.inventory = ((Chest) block.getState()).getInventory();
         this.teleportLocation = block.getLocation().add(0.5, -0.9, 0.5);
         this.eatenPlayer = awakener;
-        updateHologram("Eater");
 
         generatePlayerHead(awakener); // Pone la cabeza del jugador en la ranura 0 (de lo contrario, no se cargaría la skin del cráneo)
 
@@ -87,7 +88,7 @@ public class MimicChestEater extends MimicChestPart {
     }
 
     private void startListeners() {
-        service.getPlugin().getServer().getPluginManager().registerEvents(new Listener() {
+        mimicListener = new Listener() {
             @EventHandler
             public void onInventoryClick(InventoryClickEvent event) {
                 if (event.getWhoClicked() == eatenPlayer) {
@@ -161,7 +162,8 @@ public class MimicChestEater extends MimicChestPart {
                 if (event.getDamager() != eatenPlayer) return;
                 if (!isOpen) event.setCancelled(true);
             }
-        }, service.getPlugin());
+        };
+        service.getPlugin().getServer().getPluginManager().registerEvents(mimicListener, service.getPlugin());
     }
 
     private void eatPlayerItem() {
@@ -230,6 +232,7 @@ public class MimicChestEater extends MimicChestPart {
                 eatenPlayer.removePotionEffect(effect.getType());
             }
             MimicUtils.sendRealPlayerEquipment(eatenPlayer);
+            HandlerList.unregisterAll(mimicListener); // Unregister the event listeners
             eatenPlayer = null;
         }
     }
@@ -349,9 +352,9 @@ public class MimicChestEater extends MimicChestPart {
                 eatenPlayer.removePotionEffect(effect.getType());
             }
             MimicUtils.sendRealPlayerEquipment(eatenPlayer);
+            HandlerList.unregisterAll(mimicListener); // Unregister the event listeners
             eatenPlayer = null;
         }
-        removeHologram();
         removeReachArea();
     }
 

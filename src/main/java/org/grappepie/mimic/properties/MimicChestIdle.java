@@ -6,7 +6,6 @@ public class MimicChestIdle extends MimicChestPart {
 
     public MimicChestIdle(MimicChestService service, Block block) {
         super(service, block);
-        updateHologram("Idle");
     }
 
     @Override
@@ -18,11 +17,9 @@ public class MimicChestIdle extends MimicChestPart {
             } else {
                 // Si el atacante no se pudo crear, asegúrate de marcar el MimicIdle como destruido
                 destroyed = true;
-                removeHologram();
             }
         } else {
             destroyed = true;
-            removeHologram();
         }
     }
 

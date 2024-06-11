@@ -1,13 +1,10 @@
 package org.grappepie.mimic.properties;
 
-import org.bukkit.Bukkit;
-import org.bukkit.Location;
-import org.bukkit.Material;
-import org.bukkit.Sound;
-import org.bukkit.World;
+import org.bukkit.*;
 import org.bukkit.block.Block;
 import org.bukkit.block.Chest;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.util.Vector;
 
@@ -52,24 +49,24 @@ public class MimicUtils {
     }
 
     public static void sendFakePlayerEquipment(Player player, ItemStack itemStack) {
-        sendPlayerEquipment(player, itemStack, "HEAD");
-        sendPlayerEquipment(player, null, "MAINHAND");
-        sendPlayerEquipment(player, null, "OFFHAND");
-        sendPlayerEquipment(player, null, "FEET");
-        sendPlayerEquipment(player, null, "LEGS");
-        sendPlayerEquipment(player, null, "CHEST");
+        sendPlayerEquipment(player, itemStack, EquipmentSlot.HEAD);
+        sendPlayerEquipment(player, null, EquipmentSlot.HAND);
+        sendPlayerEquipment(player, null, EquipmentSlot.OFF_HAND);
+        sendPlayerEquipment(player, null, EquipmentSlot.FEET);
+        sendPlayerEquipment(player, null, EquipmentSlot.LEGS);
+        sendPlayerEquipment(player, null, EquipmentSlot.CHEST);
     }
 
     public static void sendRealPlayerEquipment(Player player) {
-        sendPlayerEquipment(player, player.getInventory().getHelmet(), "HEAD");
-        sendPlayerEquipment(player, player.getInventory().getItemInMainHand(), "MAINHAND");
-        sendPlayerEquipment(player, player.getInventory().getItemInOffHand(), "OFFHAND");
-        sendPlayerEquipment(player, player.getInventory().getBoots(), "FEET");
-        sendPlayerEquipment(player, player.getInventory().getLeggings(), "LEGS");
-        sendPlayerEquipment(player, player.getInventory().getChestplate(), "CHEST");
+        sendPlayerEquipment(player, player.getInventory().getHelmet(), EquipmentSlot.HEAD);
+        sendPlayerEquipment(player, player.getInventory().getItemInMainHand(), EquipmentSlot.HAND);
+        sendPlayerEquipment(player, player.getInventory().getItemInOffHand(), EquipmentSlot.OFF_HAND);
+        sendPlayerEquipment(player, player.getInventory().getBoots(), EquipmentSlot.FEET);
+        sendPlayerEquipment(player, player.getInventory().getLeggings(), EquipmentSlot.LEGS);
+        sendPlayerEquipment(player, player.getInventory().getChestplate(), EquipmentSlot.CHEST);
     }
 
-    private static void sendPlayerEquipment(Player player, ItemStack itemStack, String slot) {
+    private static void sendPlayerEquipment(Player player, ItemStack itemStack, EquipmentSlot slot) {
         // Bukkit/Spigot does not have a direct method to send equipment packets without NMS.
         // This method could be implemented using ProtocolLib or other packet handling library.
     }
@@ -87,7 +84,10 @@ public class MimicUtils {
         return locations;
     }
 
-    public static void playParticle(Location location, String particleName, Vector dif, float speed, int count) {
-        // This method needs to be implemented using Bukkit/Spigot's particle API.
+    public static void playParticle(Location location, Particle particle, Vector dif, float speed, int count) {
+        World world = location.getWorld();
+        if (world != null) {
+            world.spawnParticle(particle, location, count, dif.getX(), dif.getY(), dif.getZ(), speed);
+        }
     }
 }

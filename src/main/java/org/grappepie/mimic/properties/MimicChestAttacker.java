@@ -8,9 +8,10 @@ import org.bukkit.block.data.Directional;
 import org.bukkit.entity.*;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.FireworkMeta;
-import org.bukkit.inventory.meta.PotionMeta;
+import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
+import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.util.Vector;
 
 import java.util.*;
@@ -42,7 +43,7 @@ public class MimicChestAttacker extends MimicChestPart {
         this.lastAttackTime = System.currentTimeMillis();
         Bukkit.getScheduler().runTask(service.getPlugin(), () -> block.getWorld().playSound(block.getLocation(), Sound.ENTITY_GHAST_SCREAM, 2, 1));
 
-        updateHologram("Attacker");
+        updateHologram(health + " HP");
 
         if (displayAttackZone) {
             displayAttackZone();
@@ -97,7 +98,7 @@ public class MimicChestAttacker extends MimicChestPart {
             return;
         }
 
-        int rnd = ThreadLocalRandom.current().nextInt(6);
+        int rnd = ThreadLocalRandom.current().nextInt(7);
         switch (rnd) {
             case 0:
                 attackLaunchFireball(target);
@@ -117,7 +118,24 @@ public class MimicChestAttacker extends MimicChestPart {
             case 5:
                 attackShulker(5);
                 break;
+            case 6:
+                attackSonicBoom(target);
+                break;
         }
+    }
+
+    private void attackSonicBoom(Player target) {
+        openChest(false);
+        Bukkit.getScheduler().runTaskLater(service.getPlugin(), () -> {
+            Location loc = target.getLocation();
+            loc.getWorld().playSound(loc, Sound.ENTITY_WARDEN_SONIC_BOOM, 1, 1);
+            loc.getWorld().spawnParticle(Particle.SONIC_BOOM, loc, 1, 0, 0, 0, 0);
+            for (Player player : getNearbyPlayers(loc, 5)) {
+                player.addPotionEffect(new PotionEffect(PotionEffectType.BLINDNESS, 100, 1));
+                player.addPotionEffect(new PotionEffect(PotionEffectType.SLOW, 100, 1));
+            }
+            closeChest(false);
+        }, 5);
     }
 
     private void attackBarfZombie() {
@@ -166,17 +184,37 @@ public class MimicChestAttacker extends MimicChestPart {
         Bukkit.getScheduler().runTaskLater(service.getPlugin(), () -> {
             Location currentLoc = attackLocation.clone();
             List<Location> tongueLocations = new ArrayList<>();
-            while (currentLoc.distance(player.getLocation()) > 1.5) {
-                Vector vector = player.getLocation().subtract(currentLoc).toVector().normalize().multiply(0.3);
-                currentLoc.add(vector);
-                tongueLocations.add(currentLoc.clone());
-                attackLocation.getWorld().spawnParticle(Particle.REDSTONE, currentLoc, 1, 1, 0.5, 0, 1);
-            }
-            player.teleport(tongueLocations.get(tongueLocations.size() - 1));
-            eatPlayer(player);
-            closeChest(false);
+            double stepSize = 0.05; // Reduce step size for slower movement
+            new BukkitRunnable() {
+                int ticksElapsed = 0; // Contador de ticks
+
+                @Override
+                public void run() {
+                    if (currentLoc.distance(player.getLocation()) <= 1.5) {
+                        player.teleport(tongueLocations.get(tongueLocations.size() - 1));
+                        eatPlayer(player);
+                        closeChest(false);
+                        cancel();
+                        return;
+                    }
+
+                    // Si han pasado 100 ticks (5 segundos), cancela el ataque de la lengua
+                    if (ticksElapsed >= 100) {
+                        cancel();
+                        return;
+                    }
+
+                    Vector vector = player.getLocation().subtract(currentLoc).toVector().normalize().multiply(stepSize);
+                    currentLoc.add(vector);
+                    tongueLocations.add(currentLoc.clone());
+                    attackLocation.getWorld().spawnParticle(Particle.REDSTONE, currentLoc, 1, new Particle.DustOptions(Color.RED, 1));
+
+                    ticksElapsed++; // Incrementa el contador de ticks
+                }
+            }.runTaskTimer(service.getPlugin(), 0, 1); // Run task every tick (1/20 second)
         }, 5);
     }
+
 
     private void attackShulker(int bulletCount) {
         openChest(false);
@@ -300,6 +338,7 @@ public class MimicChestAttacker extends MimicChestPart {
     @Override
     public void onTakeDamage(double damage) {
         this.health -= damage;
+        updateHologram(health + " HP");
         if (this.health <= 0) {
             this.onDestroy(true);
         }
@@ -314,11 +353,18 @@ public class MimicChestAttacker extends MimicChestPart {
                     double radius = scanRadius;
                     Location center = block.getLocation().add(0.5, 1.5, 0.5);
 
-                    for (double angle = 0; angle < 360; angle += 10) {
-                        double x = radius * Math.cos(Math.toRadians(angle));
-                        double z = radius * Math.sin(Math.toRadians(angle));
-                        Location particleLocation = center.clone().add(x, 0, z);
-                        center.getWorld().spawnParticle(Particle.VILLAGER_HAPPY, particleLocation, 1, 0, 0, 0, 0);
+                    for (double yAngle = 0; yAngle < 180; yAngle += 10) {
+                        for (double xzAngle = 0; xzAngle < 360; xzAngle += 10) {
+                            double radianY = Math.toRadians(yAngle);
+                            double radianXZ = Math.toRadians(xzAngle);
+
+                            double x = radius * Math.sin(radianY) * Math.cos(radianXZ);
+                            double y = radius * Math.cos(radianY);
+                            double z = radius * Math.sin(radianY) * Math.sin(radianXZ);
+
+                            Location particleLocation = center.clone().add(x, y, z);
+                            center.getWorld().spawnParticle(Particle.VILLAGER_HAPPY, particleLocation, 1, 0, 0, 0, 0);
+                        }
                     }
                 });
             }
