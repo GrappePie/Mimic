@@ -98,15 +98,27 @@ public class MimicChestService {
             return;
         }
         if (part instanceof MimicChestAttacker) {
-            part.onTakeDamage(1); // Modificado aquí
+            Bukkit.getConsoleSender().sendMessage(ChatColor.RED + "MimicChestAttacker destroyed");
+            part.onTakeDamage(1); // Reduce health by 1
+            if (part.getHealth() <= 0) {
+                part.onDestroy(true); // Perform death animation
+                mimicParts.remove(block);
+            }
             return;
         }
         if (part instanceof MimicChestEater) {
-            part.onDestroy(true);
-            MimicChestAttacker attacker = createNewAttacker(block);
-            mimicParts.put(block, attacker);
-            if (part.getHealth() != null) {
-                attacker.setHealth(part.getHealth());
+            Bukkit.getConsoleSender().sendMessage(ChatColor.RED + "MimicChestEater destroyed");
+            if (((MimicChestEater) part).hasEatenPlayer()) {
+                ((MimicChestEater) part).releasePlayer(); // Vomit the eaten player
+                part.onDestroy(true);
+                mimicParts.remove(block);
+            } else {
+                part.onDestroy(true);
+                MimicChestAttacker attacker = createNewAttacker(block);
+                mimicParts.put(block, attacker);
+                if (part.getHealth() != null) {
+                    attacker.setHealth(part.getHealth());
+                }
             }
             return;
         }
@@ -200,6 +212,7 @@ public class MimicChestService {
         if (config != null) {
             name += " " + new JSONObject(config).toString();
         }
+        if (!(block.getState() instanceof Chest)) return null;
         Chest chest = (Chest) block.getState();
         chest.setCustomName(name);
         return block;
@@ -251,6 +264,7 @@ public class MimicChestService {
                 ((Chest) block.getState()).getInventory().getViewers().get(0).getOpenInventory().getTitle().startsWith(mimicChestName)) {
             return new HashMap<>();
         } else {
+            if (!(block.getState() instanceof Chest)) return new HashMap<>();
             Chest chest = (Chest) block.getState();
             String customName = chest.getCustomName();
             if (customName == null || customName.isEmpty()) {

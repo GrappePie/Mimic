@@ -31,7 +31,7 @@ public class MimicChestAttacker extends MimicChestPart {
 
     public MimicChestAttacker(MimicChestService service, Block block, Map<String, Object> params) {
         super(service, block);
-
+        new MimicUtils.MagicCircle(block,Color.RED).runTaskTimer(service.getPlugin(), 0, 2);
         this.maxHealth = params.get("maxHealth") != null ? (Double) params.get("maxHealth") : 20.0;
         this.health = params.get("health") != null ? (Double) params.get("health") : maxHealth;
         this.maxAttackDelay = params.get("maxAttackDelay") != null ? (Integer) params.get("maxAttackDelay") : 40;
@@ -318,6 +318,7 @@ public class MimicChestAttacker extends MimicChestPart {
     public void onDestroy(boolean becauseDestroyed) {
         destroyed = true;
         if (becauseDestroyed) {
+            if (!(block.getState() instanceof Chest)) return;
             block.getWorld().playSound(block.getLocation(), Sound.ENTITY_ZOMBIE_HORSE_DEATH, 1, 1);
             Chest chest = (Chest) block.getState();
             List<ItemStack> items = new ArrayList<>(Arrays.asList(chest.getInventory().getContents()));

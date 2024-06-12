@@ -38,6 +38,7 @@ public class MimicChestEater extends MimicChestPart {
 
     public MimicChestEater(MimicChestService service, Block block, Player awakener, Timer workspace, Double health) {
         super(service, block);
+        new MimicUtils.MagicCircle(block,Color.ORANGE).runTaskTimer(service.getPlugin(), 0, 2);
         this.health = health;
         this.eatingTimer = workspace;
         this.inventory = ((Chest) block.getState()).getInventory();
@@ -225,7 +226,7 @@ public class MimicChestEater extends MimicChestPart {
         }, 0, 2 * 50);
     }
 
-    private void releasePlayer() {
+    public void releasePlayer() {
         if (eatenPlayer != null) {
             eatenPlayer.setAllowFlight(eatenPlayerAllowedFly);
             for (PotionEffect effect : eatenPlayer.getActivePotionEffects()) {
@@ -383,5 +384,9 @@ public class MimicChestEater extends MimicChestPart {
     @Override
     public void removeReachArea() {
         // Implement logic to remove reach area
+    }
+
+    public boolean hasEatenPlayer() {
+        return eatenPlayer != null;
     }
 }

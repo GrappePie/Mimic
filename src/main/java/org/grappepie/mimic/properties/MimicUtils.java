@@ -6,11 +6,13 @@ import org.bukkit.block.Chest;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.util.Vector;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
 
 public class MimicUtils {
 
@@ -84,10 +86,76 @@ public class MimicUtils {
         return locations;
     }
 
-    public static void playParticle(Location location, Particle particle, Vector dif, float speed, int count) {
-        World world = location.getWorld();
-        if (world != null) {
-            world.spawnParticle(particle, location, count, dif.getX(), dif.getY(), dif.getZ(), speed);
+    public static class MagicCircle extends BukkitRunnable {
+        private final Block block;
+        private final Color color;
+        private double angle = 0;
+
+        public MagicCircle(Block block, Color color) {
+            this.block = block;
+            this.color = color;
+        }
+
+        @Override
+        public void run() {
+            if (block == null || block.getType() != Material.CHEST) {
+                this.cancel();
+                return;
+            }
+
+            Location center = block.getLocation().add(0.5, -0.5, 0.5);
+
+            // First layer (blue triangle, clockwise)
+            double radius1 = 1.5;
+            Vector[] triangleVertices = new Vector[3];
+            for (int i = 0; i < 3; i++) {
+                double theta = angle + i * (2 * Math.PI / 3);
+                triangleVertices[i] = new Vector(Math.cos(theta), 0, Math.sin(theta)).multiply(radius1);
+            }
+            generateParticlesAlongEdges(center, triangleVertices, color);
+
+            // Second layer (cyan square, counter-clockwise)
+            double radius2 = 2.0;
+            Vector[] squareVertices = new Vector[4];
+            for (int i = 0; i < 4; i++) {
+                double theta = -angle + i * (2 * Math.PI / 4);
+                squareVertices[i] = new Vector(Math.cos(theta), 0, Math.sin(theta)).multiply(radius2);
+            }
+            generateParticlesAlongEdges(center, squareVertices, color);
+
+            // Third layer (green pentagon, clockwise)
+            double radius3 = 2.5;
+            Vector[] pentagonVertices = new Vector[5];
+            for (int i = 0; i < 5; i++) {
+                double theta = angle + i * (2 * Math.PI / 5);
+                pentagonVertices[i] = new Vector(Math.cos(theta), 0, Math.sin(theta)).multiply(radius3);
+            }
+            generateParticlesAlongEdges(center, pentagonVertices, color);
+
+            // Fourth layer (red hexagon, counter-clockwise)
+            double radius4 = 3.0;
+            Vector[] hexagonVertices = new Vector[6];
+            for (int i = 0; i < 6; i++) {
+                double theta = -angle + i * (2 * Math.PI / 6);
+                hexagonVertices[i] = new Vector(Math.cos(theta), 0, Math.sin(theta)).multiply(radius4);
+            }
+            generateParticlesAlongEdges(center, hexagonVertices, color);
+
+            // Update the angle for rotation
+            angle += Math.PI / 60;
+        }
+
+        private void generateParticlesAlongEdges(Location center, Vector[] vertices, Color color) {
+            int pointsPerEdge = 20; // Number of points (particles) per edge
+            for (int i = 0; i < vertices.length; i++) {
+                Vector start = vertices[i];
+                Vector end = vertices[(i + 1) % vertices.length];
+                for (int j = 0; j <= pointsPerEdge; j++) {
+                    Vector point = start.clone().add(end.clone().subtract(start).multiply(j / (double) pointsPerEdge));
+                    Location particleLocation = center.clone().add(point);
+                    center.getWorld().spawnParticle(Particle.REDSTONE, particleLocation, 1, new Particle.DustOptions(color, 0.5f));
+                }
+            }
         }
     }
 }
