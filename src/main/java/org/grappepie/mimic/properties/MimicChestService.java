@@ -158,8 +158,10 @@ public class MimicChestService {
                 part.onDestroy(true);
                 MimicChestAttacker attacker = createNewAttacker(block);
                 mimicParts.put(block, attacker);
-                if (part.getHealth() != null) {
+                if (attacker != null && part.getHealth() != null) {
                     attacker.setHealth(part.getHealth());
+                } else if (attacker == null) {
+                    Bukkit.getConsoleSender().sendMessage(ChatColor.RED + "[Mimic] Error: No se pudo crear MimicChestAttacker tras explosión");
                 }
                 return true;
             }
@@ -186,8 +188,10 @@ public class MimicChestService {
                 part.onDestroy(true);
                 MimicChestAttacker attacker = createNewAttacker(block);
                 mimicParts.put(block, attacker);
-                if (part.getHealth() != null) {
+                if (attacker != null && part.getHealth() != null) {
                     attacker.setHealth(part.getHealth());
+                } else if (attacker == null) {
+                    Bukkit.getConsoleSender().sendMessage(ChatColor.RED + "[Mimic] Error: No se pudo crear MimicChestAttacker tras explosión");
                 }
                 return true;
             }
@@ -302,6 +306,9 @@ public class MimicChestService {
             MimicChestPart part = mimicParts.get(block);
             if (part instanceof MimicChestEater) {
                 part.removeHologram();
+                if (part instanceof MimicChestEater) {
+                    ((MimicChestEater) part).clearMagicCircle();
+                }
                 mimicParts.put(block, new MimicChestIdle(this, block));
             }
         }
@@ -312,6 +319,9 @@ public class MimicChestService {
             MimicChestPart part = mimicParts.get(block);
             if (part instanceof MimicChestEater) {
                 part.removeHologram();
+                if (part instanceof MimicChestEater) {
+                    ((MimicChestEater) part).clearMagicCircle();
+                }
                 mimicParts.put(block, createNewAttacker(block));
             }
         }

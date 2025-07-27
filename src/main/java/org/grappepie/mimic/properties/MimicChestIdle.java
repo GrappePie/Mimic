@@ -10,13 +10,24 @@ import org.bukkit.Particle;
 
 public class MimicChestIdle extends MimicChestPart {
 
+    private MimicUtils.MagicCircle magicCircle;
+
     public MimicChestIdle(MimicChestService service, Block block) {
         super(service, block);
-        new MimicUtils.MagicCircle(block,Color.WHITE).runTaskTimer(service.getPlugin(), 0, 2);
+        this.magicCircle = new MimicUtils.MagicCircle(block,Color.WHITE);
+        this.magicCircle.runTaskTimer(service.getPlugin(), 0, 2);
+    }
+
+    public void clearMagicCircle() {
+        if (magicCircle != null) {
+            magicCircle.cancel();
+            magicCircle = null;
+        }
     }
 
     @Override
     public void onDestroy(boolean becauseBroken) {
+        clearMagicCircle();
         if (becauseBroken) {
             MimicChestAttacker attacker = service.createNewAttacker(block);
             if (attacker != null) {

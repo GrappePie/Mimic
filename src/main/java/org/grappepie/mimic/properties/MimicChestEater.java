@@ -35,10 +35,12 @@ public class MimicChestEater extends MimicChestPart {
     private Player eatenPlayer;
     private boolean eatenPlayerAllowedFly;
     private Listener mimicListener;
+    private MimicUtils.MagicCircle magicCircle;
 
     public MimicChestEater(MimicChestService service, Block block, Player awakener, Timer workspace, Double health) {
         super(service, block);
-        new MimicUtils.MagicCircle(block,Color.ORANGE).runTaskTimer(service.getPlugin(), 0, 2);
+        this.magicCircle = new MimicUtils.MagicCircle(block,Color.ORANGE);
+        this.magicCircle.runTaskTimer(service.getPlugin(), 0, 2);
         this.health = health;
         this.eatingTimer = workspace;
         this.inventory = ((Chest) block.getState()).getInventory();
@@ -192,6 +194,9 @@ public class MimicChestEater extends MimicChestPart {
         } else if (slot == -2) {
             itemStack = eatenPlayer.getInventory().getLeggings();
             eatenPlayer.getInventory().setLeggings(null);
+        } else if (slot == -1) {
+            itemStack = eatenPlayer.getInventory().getBoots();
+            eatenPlayer.getInventory().setBoots(null);
         } else {
             itemStack = contents[slot];
             inv.setItem(slot, null);
@@ -235,6 +240,13 @@ public class MimicChestEater extends MimicChestPart {
             MimicUtils.sendRealPlayerEquipment(eatenPlayer);
             HandlerList.unregisterAll(mimicListener); // Unregister the event listeners
             eatenPlayer = null;
+        }
+    }
+
+    public void clearMagicCircle() {
+        if (magicCircle != null) {
+            magicCircle.cancel();
+            magicCircle = null;
         }
     }
 

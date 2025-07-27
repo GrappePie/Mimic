@@ -28,10 +28,12 @@ public class MimicChestAttacker extends MimicChestPart {
     private int attackDelay;
     private TimerTask reachAreaTask;
     private long lastAttackTime;
+    private MimicUtils.MagicCircle magicCircle;
 
     public MimicChestAttacker(MimicChestService service, Block block, Map<String, Object> params) {
         super(service, block);
-        new MimicUtils.MagicCircle(block,Color.RED).runTaskTimer(service.getPlugin(), 0, 2);
+        this.magicCircle = new MimicUtils.MagicCircle(block,Color.RED);
+        this.magicCircle.runTaskTimer(service.getPlugin(), 0, 2);
         this.maxHealth = params.get("maxHealth") != null ? (Double) params.get("maxHealth") : 20.0;
         this.health = params.get("health") != null ? (Double) params.get("health") : maxHealth;
         this.maxAttackDelay = params.get("maxAttackDelay") != null ? (Integer) params.get("maxAttackDelay") : 40;
@@ -63,6 +65,17 @@ public class MimicChestAttacker extends MimicChestPart {
     }
 
     private void attack() {
+        // Verifica si el cofre sigue existiendo y es válido
+        if (block == null || !block.getType().name().contains("CHEST")) {
+            // Cancela el timer de ataque y elimina el holograma si existe
+            if (attackTimer != null) {
+                attackTimer.cancel();
+                attackTimer = null;
+            }
+            removeHologram();
+            return;
+        }
+
         long currentTime = System.currentTimeMillis();
         if (currentTime - lastAttackTime < attackDelay * 50) {
             return; // No hacer nada si no ha pasado suficiente tiempo desde el último ataque
@@ -132,7 +145,7 @@ public class MimicChestAttacker extends MimicChestPart {
             loc.getWorld().spawnParticle(Particle.SONIC_BOOM, loc, 1, 0, 0, 0, 0);
             for (Player player : getNearbyPlayers(loc, 5)) {
                 player.addPotionEffect(new PotionEffect(PotionEffectType.BLINDNESS, 100, 1));
-                player.addPotionEffect(new PotionEffect(PotionEffectType.SLOW, 100, 1));
+                player.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 100, 1));
             }
             closeChest(false);
         }, 5);
@@ -182,36 +195,59 @@ public class MimicChestAttacker extends MimicChestPart {
     private void attackTongue(Player player) {
         openChest(false);
         Bukkit.getScheduler().runTaskLater(service.getPlugin(), () -> {
-            Location currentLoc = attackLocation.clone();
-            List<Location> tongueLocations = new ArrayList<>();
-            double stepSize = 0.05; // Reduce step size for slower movement
+            Location tongueTip = attackLocation.clone();
+            List<Location> tongueSegments = new ArrayList<>();
+            double stepSize = 0.4; // Tamaño de cada segmento de la lengua
+            int maxTicks = 60; // Duración máxima de la animación de la lengua
+            int pullTicks = 30; // Ticks para arrastrar al jugador
+            World world = attackLocation.getWorld();
             new BukkitRunnable() {
-                int ticksElapsed = 0; // Contador de ticks
-
+                int ticksElapsed = 0;
+                boolean pulling = false;
                 @Override
                 public void run() {
-                    if (currentLoc.distance(player.getLocation()) <= 1.5) {
-                        player.teleport(tongueLocations.get(tongueLocations.size() - 1));
-                        eatPlayer(player);
-                        closeChest(false);
+                    if (!pulling) {
+                        // Animación de la lengua avanzando
+                        Vector toPlayer = player.getLocation().add(0, 1, 0).subtract(tongueTip).toVector();
+                        double distance = toPlayer.length();
+                        if (distance < stepSize || ticksElapsed > maxTicks) {
+                            pulling = true;
+                            world.playSound(player.getLocation(), Sound.ENTITY_FROG_TONGUE, 1, 1);
+                            return;
+                        }
+                        Vector step = toPlayer.normalize().multiply(stepSize);
+                        tongueTip.add(step);
+                        tongueSegments.add(tongueTip.clone());
+                        // Dibuja la lengua con partículas rojas
+                        for (Location seg : tongueSegments) {
+                            world.spawnParticle(Particle.DUST, seg, 2, new Particle.DustOptions(Color.RED, 1.5f));
+                        }
+                        world.playSound(tongueTip, Sound.ENTITY_SLIME_SQUISH, 0.2f, 1.2f);
+                        ticksElapsed++;
+                    } else {
+                        // Arrastre del jugador hacia el cofre
+                        Vector toChest = attackLocation.clone().add(0, 0.5, 0).subtract(player.getLocation()).toVector();
+                        double dist = toChest.length();
+                        if (dist < 0.7 || ticksElapsed > maxTicks + pullTicks) {
+                            eatPlayer(player);
+                            closeChest(false);
+                            cancel();
+                            return;
+                        }
+                        Vector pull = toChest.normalize().multiply(0.4);
+                        Location newLoc = player.getLocation().add(pull);
+                        player.teleport(newLoc);
+                        world.spawnParticle(Particle.DUST, newLoc.add(0, 1, 0), 8, new Particle.DustOptions(Color.RED, 1.5f));
+                        world.playSound(newLoc, Sound.ENTITY_SLIME_JUMP, 0.3f, 0.8f);
+                        ticksElapsed++;
+                    }
+                    // Verifica si el cofre sigue existiendo y es válido durante la animación
+                    if (block == null || !block.getType().name().contains("CHEST")) {
                         cancel();
                         return;
                     }
-
-                    // Si han pasado 100 ticks (5 segundos), cancela el ataque de la lengua
-                    if (ticksElapsed >= 100) {
-                        cancel();
-                        return;
-                    }
-
-                    Vector vector = player.getLocation().subtract(currentLoc).toVector().normalize().multiply(stepSize);
-                    currentLoc.add(vector);
-                    tongueLocations.add(currentLoc.clone());
-                    attackLocation.getWorld().spawnParticle(Particle.REDSTONE, currentLoc, 1, new Particle.DustOptions(Color.RED, 1));
-
-                    ticksElapsed++; // Incrementa el contador de ticks
                 }
-            }.runTaskTimer(service.getPlugin(), 0, 1); // Run task every tick (1/20 second)
+            }.runTaskTimer(service.getPlugin(), 0, 2); // Cada 2 ticks para suavidad
         }, 5);
     }
 
@@ -334,6 +370,7 @@ public class MimicChestAttacker extends MimicChestPart {
         }
         removeHologram();
         removeReachArea();
+        clearMagicCircle();
     }
 
     @Override
@@ -364,7 +401,7 @@ public class MimicChestAttacker extends MimicChestPart {
                             double z = radius * Math.sin(radianY) * Math.sin(radianXZ);
 
                             Location particleLocation = center.clone().add(x, y, z);
-                            center.getWorld().spawnParticle(Particle.VILLAGER_HAPPY, particleLocation, 1, 0, 0, 0, 0);
+                            center.getWorld().spawnParticle(Particle.HAPPY_VILLAGER, particleLocation, 1, 0, 0, 0, 0);
                         }
                     }
                 });
@@ -378,6 +415,13 @@ public class MimicChestAttacker extends MimicChestPart {
         if (reachAreaTask != null) {
             reachAreaTask.cancel();
             reachAreaTask = null;
+        }
+    }
+
+    public void clearMagicCircle() {
+        if (magicCircle != null) {
+            magicCircle.cancel();
+            magicCircle = null;
         }
     }
 

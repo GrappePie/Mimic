@@ -153,7 +153,7 @@ public class MimicUtils {
                 for (int j = 0; j <= pointsPerEdge; j++) {
                     Vector point = start.clone().add(end.clone().subtract(start).multiply(j / (double) pointsPerEdge));
                     Location particleLocation = center.clone().add(point);
-                    center.getWorld().spawnParticle(Particle.REDSTONE, particleLocation, 1, new Particle.DustOptions(color, 0.5f));
+                    center.getWorld().spawnParticle(Particle.DUST, particleLocation, 1, new Particle.DustOptions(color, 0.5f));
                 }
             }
         }
