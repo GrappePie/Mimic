@@ -1,33 +1,59 @@
 package org.grappepie.mimic;
 
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Bukkit;
-import org.bukkit.ChatColor;
 import org.bukkit.plugin.java.JavaPlugin;
-import org.grappepie.mimic.commands.MimicDebugCommand;
-import org.grappepie.mimic.commands.SpawnMimic;
+import org.grappepie.mimic.commands.*;
+import org.grappepie.mimic.items.MimicSoul;
+import org.grappepie.mimic.config.MimicConfig;
 import org.grappepie.mimic.listeners.*;
+import org.grappepie.mimic.listeners.MimicSoulListener;
+import org.grappepie.mimic.persistence.MimicPersistence;
 import org.grappepie.mimic.properties.MimicChestService;
+import org.grappepie.mimic.properties.MimicChestPart;
+import org.grappepie.mimic.registry.MimicRegistry;
 
 public final class Mimic extends JavaPlugin {
 
-    public static String prefix = "&7[&bMi&3mic&7] ";
-    private String version = getDescription().getVersion();
-    private MimicChestService mimicChestService;
-    private boolean debugMode = false; // Añadido para controlar el modo de depuración
+    private MimicChestService service;
+    private MimicRegistry registry;
+    private MimicPersistence persistence;
+    private boolean debugMode = false;
 
     @Override
     public void onEnable() {
-        // Plugin startup logic
-        mimicChestService = new MimicChestService();
+        MimicConfig config = new MimicConfig(this);
+        registry = new MimicRegistry();
+        service = new MimicChestService(this, config, registry);
+
+        persistence = new MimicPersistence(this, registry, config, service);
+        persistence.load();
+
         registerCommands();
         registerListeners();
-        Bukkit.getConsoleSender().sendMessage(ChatColor.translateAlternateColorCodes('&', prefix + "&8v" + version + " &ahas been enabled!"));
+
+        getServer().getConsoleSender().sendMessage(
+                Component.text("[Mimic] ", NamedTextColor.AQUA)
+                        .append(Component.text("v" + getDescription().getVersion()
+                                + " enabled.", NamedTextColor.GREEN)));
     }
 
     @Override
     public void onDisable() {
-        // Plugin shutdown logic
-        Bukkit.getConsoleSender().sendMessage(ChatColor.translateAlternateColorCodes('&', prefix + "&8v" + version + " &chas been disabled!"));
+        if (persistence != null) persistence.save();
+
+        // Cleanly destroy all active mimics so tasks and holograms are removed
+        if (registry != null) {
+            for (MimicChestPart part : registry.all()) {
+                if (!part.isDestroyed()) part.onDestroy(false);
+            }
+        }
+
+        getServer().getConsoleSender().sendMessage(
+                Component.text("[Mimic] ", NamedTextColor.AQUA)
+                        .append(Component.text("v" + getDescription().getVersion()
+                                + " disabled.", NamedTextColor.RED)));
     }
 
     public boolean isDebugMode() {
@@ -36,20 +62,29 @@ public final class Mimic extends JavaPlugin {
 
     public void setDebugMode(boolean debugMode) {
         this.debugMode = debugMode;
-        mimicChestService.updateDebugMode(debugMode);
+        service.updateDebugMode(debugMode);
     }
 
     private void registerCommands() {
-        // Register commands here
-        this.getCommand("spawnmimic").setExecutor(new SpawnMimic(mimicChestService));
-        this.getCommand("mimicdebug").setExecutor(new MimicDebugCommand(this));
+        getCommand("spawnmimic").setExecutor(new SpawnMimic(service));
+        getCommand("spawnmimicattacker").setExecutor(new SpawnMimicAttacker(service));
+        getCommand("spawnmimiceater").setExecutor(new SpawnMimicEater(service));
+        getCommand("mimicdebug").setExecutor(new MimicDebugCommand(this));
+        GiveMimicSoul giveSoulCmd = new GiveMimicSoul(this);
+        getCommand("givemimicsoul").setExecutor(giveSoulCmd);
+        getCommand("givemimicsoul").setTabCompleter(giveSoulCmd);
+        getCommand("mimicreload").setExecutor((sender, cmd, label, args) -> {
+            reloadConfig();
+            sender.sendMessage(Component.text("Mimic config reloaded. Restart for full effect.",
+                    NamedTextColor.YELLOW));
+            return true;
+        });
     }
 
     private void registerListeners() {
-        // Register event listeners here
-        Bukkit.getPluginManager().registerEvents(new MimicChestListener(mimicChestService), this);
-        Bukkit.getPluginManager().registerEvents(new MimicChestIdleListener(mimicChestService), this);
-        //Bukkit.getPluginManager().registerEvents(new MimicChestEaterListener(mimicChestService), this);
-        //Bukkit.getPluginManager().registerEvents(new MimicChestAttackerListener(mimicChestService), this);
+        Bukkit.getPluginManager().registerEvents(new MimicChestListener(service, registry), this);
+        Bukkit.getPluginManager().registerEvents(new MimicChestEaterListener(registry), this);
+        Bukkit.getPluginManager().registerEvents(new MimicChestAttackerListener(registry), this);
+        Bukkit.getPluginManager().registerEvents(new MimicSoulListener(this, service, registry), this);
     }
 }

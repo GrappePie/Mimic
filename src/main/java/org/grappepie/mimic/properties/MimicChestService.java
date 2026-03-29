@@ -1,329 +1,284 @@
 package org.grappepie.mimic.properties;
 
-import org.bukkit.Bukkit;
-import org.bukkit.ChatColor;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.GameMode;
-import org.bukkit.Material;
 import org.bukkit.block.Block;
-import org.bukkit.block.Chest;
 import org.bukkit.entity.Player;
-import org.bukkit.event.block.Action;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.BlockExplodeEvent;
 import org.bukkit.event.entity.EntityExplodeEvent;
-import org.bukkit.event.entity.PlayerDeathEvent;
-import org.bukkit.event.inventory.InventoryClickEvent;
-import org.bukkit.event.player.*;
-import org.bukkit.inventory.ItemStack;
-import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.event.block.Action;
 import org.bukkit.plugin.java.JavaPlugin;
-import org.json.JSONObject;
-
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Timer;
+import org.grappepie.mimic.config.MimicConfig;
+import org.grappepie.mimic.persistence.MimicPersistentData;
+import org.grappepie.mimic.registry.MimicRegistry;
 
 public class MimicChestService {
-    private static MimicChestService instance;
-    private final String mimicChestName = ChatColor.translateAlternateColorCodes('&', "&eMimic");
-    private final Map<Block, MimicChestPart> mimicParts = new HashMap<>();
+
+    private final JavaPlugin plugin;
+    private final MimicConfig config;
+    private final MimicRegistry registry;
     private boolean debugMode = false;
 
-    public MimicChestService() {
-        instance = this;
+    public MimicChestService(JavaPlugin plugin, MimicConfig config, MimicRegistry registry) {
+        this.plugin = plugin;
+        this.config = config;
+        this.registry = registry;
     }
 
-    public static MimicChestService getInstance() {
-        return instance;
-    }
+    public JavaPlugin getPlugin() { return plugin; }
+    public MimicConfig getConfig() { return config; }
+    public MimicRegistry getRegistry() { return registry; }
 
-    public JavaPlugin getPlugin() {
-        return JavaPlugin.getProvidingPlugin(getClass());
-    }
+    // -------------------------------------------------------------------------
+    // Debug mode
+    // -------------------------------------------------------------------------
 
     public void updateDebugMode(boolean debugMode) {
         this.debugMode = debugMode;
-        for (MimicChestPart part : mimicParts.values()) {
+        for (MimicChestPart part : registry.all()) {
             part.updateDebugMode(debugMode);
         }
     }
 
+    // -------------------------------------------------------------------------
+    // Event handlers
+    // -------------------------------------------------------------------------
+
     public void onPlayerInteract(PlayerInteractEvent event) {
         if (event.getClickedBlock() == null) return;
-        if (!(event.getPlayer().getGameMode() == GameMode.ADVENTURE || event.getPlayer().getGameMode() == GameMode.SURVIVAL)) return;
-        Block block = event.getClickedBlock();
-        if (!MimicUtils.chestTypes.contains(block.getType())) return;
-        if (!((Chest) block.getState()).getInventory().getViewers().isEmpty() &&
-                ((Chest) block.getState()).getInventory().getViewers().get(0).getOpenInventory().getTitle().startsWith(mimicChestName)) return;
-        Action action = event.getAction();
-        event.setCancelled(true);
+        if (event.getPlayer().getGameMode() != GameMode.ADVENTURE
+                && event.getPlayer().getGameMode() != GameMode.SURVIVAL) return;
 
-        MimicChestPart part = mimicParts.get(block);
-        if (part == null || part.isDestroyed()) {
-            part = new MimicChestIdle(this, block);
-            mimicParts.put(block, part);
-        }
+        Block block = event.getClickedBlock();
+        if (!MimicUtils.isChest(block)) return;
+
+        Action action = event.getAction();
+        MimicChestPart part = registry.get(block);
+
+        // Not a registered mimic — let Bukkit handle the chest normally
+        if (part == null || part.isDestroyed()) return;
 
         if (part instanceof MimicChestIdle) {
             if (action == Action.RIGHT_CLICK_BLOCK) {
-                // Remove the old hologram
+                event.setCancelled(true);
                 part.removeHologram();
-
-                MimicChestEater eater = new MimicChestEater(this, block, event.getPlayer(), new Timer(), null);
-                mimicParts.put(block, eater);
+                part.onDestroy(false);
+                registry.unregister(block);
+                MimicChestEater eater = new MimicChestEater(this, block, event.getPlayer(), null);
+                registry.register(block, eater);
+                MimicPersistentData.tag(block, MimicState.EATER, plugin);
+                eater.updateDebugMode(debugMode);
             }
-        } else if (part instanceof MimicChestEater) {
-            MimicChestEater eater = (MimicChestEater) part;
+        } else if (part instanceof MimicChestEater eater) {
+            event.setCancelled(true);
             if (eater.isOpen()) eater.closeChest(false);
             else eater.openChest(false);
+        } else if (part instanceof MimicChestAttacker) {
+            event.setCancelled(true);
         }
-
-        event.setCancelled(false);
     }
 
     public void onBlockBreak(BlockBreakEvent event) {
         Block block = event.getBlock();
-        if (!MimicUtils.chestTypes.contains(block.getType())) return;
-        if (!((Chest) block.getState()).getInventory().getViewers().isEmpty() &&
-                ((Chest) block.getState()).getInventory().getViewers().get(0).getOpenInventory().getTitle().startsWith(mimicChestName)) return;
-        event.setCancelled(true);
-        MimicChestPart part = mimicParts.get(block);
+        if (!MimicUtils.isChest(block)) return;
+
+        MimicChestPart part = registry.get(block);
+        if (part == null) return;
+
         if (event.getPlayer().getGameMode() == GameMode.CREATIVE) {
-            event.setCancelled(false);
-            if (part != null) {
-                part.onDestroy(true);
-                mimicParts.remove(block);
+            part.onDestroy(false);
+            registry.unregister(block);
+            MimicPersistentData.clear(block, plugin);
+            return;
+        }
+
+        event.setCancelled(true);
+
+        if (part instanceof MimicChestAttacker attacker) {
+            attacker.onTakeDamage(1);
+            if (attacker.isDestroyed()) {
+                registry.unregister(block);
+                MimicPersistentData.clear(block, plugin);
             }
             return;
         }
-        if (part instanceof MimicChestAttacker) {
-            Bukkit.getConsoleSender().sendMessage(ChatColor.RED + "MimicChestAttacker destroyed");
-            part.onTakeDamage(1); // Reduce health by 1
-            if (part.getHealth() <= 0) {
-                part.onDestroy(true); // Perform death animation
-                mimicParts.remove(block);
-            }
-            return;
-        }
-        if (part instanceof MimicChestEater) {
-            Bukkit.getConsoleSender().sendMessage(ChatColor.RED + "MimicChestEater destroyed");
-            if (((MimicChestEater) part).hasEatenPlayer()) {
-                ((MimicChestEater) part).releasePlayer(); // Vomit the eaten player
-                part.onDestroy(true);
-                mimicParts.remove(block);
+
+        if (part instanceof MimicChestEater eater) {
+            if (eater.hasEatenPlayer()) {
+                eater.releasePlayer();
+                eater.onDestroy(true);
+                registry.unregister(block);
+                MimicPersistentData.clear(block, plugin);
             } else {
-                part.onDestroy(true);
-                MimicChestAttacker attacker = createNewAttacker(block);
-                mimicParts.put(block, attacker);
-                if (part.getHealth() != null) {
-                    attacker.setHealth(part.getHealth());
+                Double savedHealth = eater.getHealth();
+                eater.onDestroy(true);
+                registry.unregister(block);
+                MimicPersistentData.clear(block, plugin);
+                MimicChestAttacker newAttacker = createNewAttacker(block);
+                if (newAttacker != null && savedHealth != null) {
+                    newAttacker.setHealth(savedHealth);
                 }
             }
             return;
         }
+
         if (part instanceof MimicChestIdle) {
             part.onDestroy(true);
-        }
-        MimicChestAttacker attacker = createNewAttacker(block);
-        if (attacker != null) {
-            mimicParts.put(block, attacker);
-            if (part != null && part.getHealth() != null) {
-                attacker.setHealth(part.getHealth());
-            }
+            registry.unregister(block);
+            MimicPersistentData.clear(block, plugin);
+            createNewAttacker(block);
         }
     }
 
     public void onEntityExplode(EntityExplodeEvent event) {
-        List<Block> blocks = event.blockList();
-        blocks.removeIf(block -> {
-            if (!MimicUtils.chestTypes.contains(block.getType())) return false;
-            if (!((Chest) block.getState()).getInventory().getViewers().isEmpty() &&
-                    ((Chest) block.getState()).getInventory().getViewers().get(0).getOpenInventory().getTitle().startsWith(mimicChestName)) return false;
-            MimicChestPart part = mimicParts.get(block);
-            if (part == null) {
-                mimicParts.put(block, createNewAttacker(block));
-                return true;
-            }
-            if (part instanceof MimicChestAttacker) {
-                // Check if the entity that caused the explosion is the Mimic
-                if (event.getEntity() == part) {
-                    // If it is, don't destroy the block
-                    return false;
-                }
-                part.onTakeDamage(1);
-                return true;
-            }
-            if (part instanceof MimicChestEater) {
-                part.onDestroy(true);
-                MimicChestAttacker attacker = createNewAttacker(block);
-                mimicParts.put(block, attacker);
-                if (attacker != null && part.getHealth() != null) {
-                    attacker.setHealth(part.getHealth());
-                } else if (attacker == null) {
-                    Bukkit.getConsoleSender().sendMessage(ChatColor.RED + "[Mimic] Error: No se pudo crear MimicChestAttacker tras explosión");
-                }
-                return true;
-            }
-            return false;
+        event.blockList().removeIf(block -> {
+            if (!MimicUtils.isChest(block)) return false;
+            handleExplosionOnChest(block, event.getEntity() == registry.get(block));
+            return true;
         });
     }
 
     public void onBlockExplode(BlockExplodeEvent event) {
-        List<Block> blocks = event.blockList();
-        blocks.removeIf(block -> {
-            if (!MimicUtils.chestTypes.contains(block.getType())) return false;
-            if (!((Chest) block.getState()).getInventory().getViewers().isEmpty() &&
-                    ((Chest) block.getState()).getInventory().getViewers().get(0).getOpenInventory().getTitle().startsWith(mimicChestName)) return false;
-            MimicChestPart part = mimicParts.get(block);
-            if (part == null) {
-                mimicParts.put(block, createNewAttacker(block));
-                return true;
-            }
-            if (part instanceof MimicChestAttacker) {
-                part.onTakeDamage(1);
-                return true;
-            }
-            if (part instanceof MimicChestEater) {
-                part.onDestroy(true);
-                MimicChestAttacker attacker = createNewAttacker(block);
-                mimicParts.put(block, attacker);
-                if (attacker != null && part.getHealth() != null) {
-                    attacker.setHealth(part.getHealth());
-                } else if (attacker == null) {
-                    Bukkit.getConsoleSender().sendMessage(ChatColor.RED + "[Mimic] Error: No se pudo crear MimicChestAttacker tras explosión");
-                }
-                return true;
-            }
-            return false;
+        event.blockList().removeIf(block -> {
+            if (!MimicUtils.isChest(block)) return false;
+            handleExplosionOnChest(block, false);
+            return true;
         });
     }
 
-    public ItemStack getMimicItem(Map<String, Object> config) {
-        ItemStack mimicItem = new ItemStack(Material.CHEST);
-        ItemMeta meta = mimicItem.getItemMeta();
-        meta.setDisplayName(mimicChestName);
-        if (config != null) {
-            meta.setDisplayName(meta.getDisplayName() + " " + new JSONObject(config).toString());
+    private void handleExplosionOnChest(Block block, boolean selfExplosion) {
+        MimicChestPart part = registry.get(block);
+        if (part == null) {
+            createNewAttacker(block);
+            return;
         }
-        mimicItem.setItemMeta(meta);
-        return mimicItem;
-    }
-
-    public Block config(Map<String, Object> config, Block block) {
-        if (!(block.getState() instanceof Chest)) return null;
-        String name = mimicChestName;
-        if (config != null) {
-            name += " " + new JSONObject(config).toString();
-        }
-        if (!(block.getState() instanceof Chest)) return null;
-        Chest chest = (Chest) block.getState();
-        chest.setCustomName(name);
-        return block;
-    }
-
-    public MimicChestPart getMimicPart(Block block) {
-        return mimicParts.get(block);
-    }
-
-    public void destroyMimic(Block block, boolean becauseBroken) {
-        MimicChestPart part = mimicParts.get(block);
-        if (part != null) {
-            part.onDestroy(becauseBroken);
-            if (part instanceof MimicChestEater && becauseBroken) {
-                mimicParts.put(block, createNewAttacker(block));
-                return;
+        if (part instanceof MimicChestAttacker attacker) {
+            if (!selfExplosion) {
+                attacker.onTakeDamage(1);
+                if (attacker.isDestroyed()) {
+                    registry.unregister(block);
+                    MimicPersistentData.clear(block, plugin);
+                }
             }
-            mimicParts.remove(block);
+        } else if (part instanceof MimicChestEater eater) {
+            Double savedHealth = eater.getHealth();
+            eater.onDestroy(true);
+            registry.unregister(block);
+            MimicPersistentData.clear(block, plugin);
+            MimicChestAttacker newAttacker = createNewAttacker(block);
+            if (newAttacker != null && savedHealth != null) {
+                newAttacker.setHealth(savedHealth);
+            }
         }
     }
 
-    public void addMimic(Block block, MimicChestPart mimic) {
-        mimicParts.put(block, mimic);
+    // -------------------------------------------------------------------------
+    // Factory methods
+    // -------------------------------------------------------------------------
+
+    public MimicChestIdle createNewIdle(Block block) {
+        if (registry.isRegistered(block)) return null;
+        MimicChestIdle idle = new MimicChestIdle(this, block);
+        idle.updateDebugMode(debugMode);
+        registry.register(block, idle);
+        MimicPersistentData.tag(block, MimicState.IDLE, plugin);
+        return idle;
     }
 
     public MimicChestEater createNewEater(Block block, Player player, Double health) {
-        if (mimicParts.containsKey(block)) return null;
-        MimicChestEater eater = new MimicChestEater(this, block, player, new Timer(), health);
+        if (registry.isRegistered(block)) return null;
+        MimicChestEater eater = new MimicChestEater(this, block, player, health);
         eater.updateDebugMode(debugMode);
-        mimicParts.put(block, eater);
+        registry.register(block, eater);
+        MimicPersistentData.tag(block, MimicState.EATER, plugin);
         return eater;
     }
 
     public MimicChestAttacker createNewAttacker(Block block) {
-        return createNewAttacker(block, getCreatingParams(block));
+        return createNewAttacker(block,
+                config.getAttackerDefaultMaxHealth(),
+                null,
+                config.getAttackerDefaultScanRadius());
     }
 
-    public MimicChestAttacker createNewAttacker(Block block, Map<String, Object> params) {
-        if (mimicParts.containsKey(block)) return null;
-        MimicChestAttacker attacker = new MimicChestAttacker(this, block, params);
+    public MimicChestAttacker createNewAttacker(Block block, double maxHealth, Double health, double scanRadius) {
+        if (registry.isRegistered(block)) return null;
+        MimicChestAttacker attacker = new MimicChestAttacker(this, block, maxHealth, health, scanRadius);
         attacker.updateDebugMode(debugMode);
-        mimicParts.put(block, attacker);
+        registry.register(block, attacker);
+        MimicPersistentData.tag(block, MimicState.ATTACKER, plugin);
         return attacker;
     }
 
-    public Map<String, Object> getCreatingParams(Block block) {
-        if (!MimicUtils.chestTypes.contains(block.getType())) return new HashMap<>();
-        if (!((Chest) block.getState()).getInventory().getViewers().isEmpty() &&
-                ((Chest) block.getState()).getInventory().getViewers().get(0).getOpenInventory().getTitle().startsWith(mimicChestName)) {
-            return new HashMap<>();
-        } else {
-            if (!(block.getState() instanceof Chest)) return new HashMap<>();
-            Chest chest = (Chest) block.getState();
-            String customName = chest.getCustomName();
-            if (customName == null || customName.isEmpty()) {
-                return new HashMap<>();
-            }
-            String[] nameParts = customName.split(" ");
-            if (nameParts.length == 1) {
-                return new HashMap<>();
-            } else {
-                String jsonString = nameParts[1];
-                try {
-                    return new JSONObject(jsonString).toMap();
-                } catch (Exception e) {
-                    System.out.println("Can't parse mimic params [" + block.getX() + ":" + block.getY() + ":" + block.getZ() + "]");
-                }
-            }
-        }
-        return new HashMap<>();
+    /** Replaces the current registry entry for a block without checking isRegistered. */
+    public void replaceWith(Block block, MimicChestPart newPart) {
+        registry.register(block, newPart);
+        newPart.updateDebugMode(debugMode);
+        MimicPersistentData.tag(block, newPart.getState(), plugin);
     }
 
-    public MimicChestEater getEaterForPlayer(Player player) {
-        for (MimicChestPart part : mimicParts.values()) {
-            if (part instanceof MimicChestEater) {
-                MimicChestEater eater = (MimicChestEater) part;
-                if (eater.getEatenPlayer() == player) {
-                    return eater;
-                }
-            }
-        }
-        return null;
-    }
+    // -------------------------------------------------------------------------
+    // State transitions
+    // -------------------------------------------------------------------------
 
     public void changeToIdle(Block block) {
-        if (mimicParts.containsKey(block)) {
-            MimicChestPart part = mimicParts.get(block);
-            if (part instanceof MimicChestEater) {
-                part.removeHologram();
-                if (part instanceof MimicChestEater) {
-                    ((MimicChestEater) part).clearMagicCircle();
-                }
-                mimicParts.put(block, new MimicChestIdle(this, block));
-            }
-        }
+        MimicChestPart part = registry.get(block);
+        if (part == null) return;
+        part.onDestroy(false);
+        registry.unregister(block);
+        createNewIdle(block);
     }
 
     public void changeToAttacker(Block block) {
-        if (mimicParts.containsKey(block)) {
-            MimicChestPart part = mimicParts.get(block);
-            if (part instanceof MimicChestEater) {
-                part.removeHologram();
-                if (part instanceof MimicChestEater) {
-                    ((MimicChestEater) part).clearMagicCircle();
-                }
-                mimicParts.put(block, createNewAttacker(block));
-            }
+        MimicChestPart part = registry.get(block);
+        if (part == null) return;
+        Double savedHealth = part.getHealth();
+        part.onDestroy(false);
+        registry.unregister(block);
+        MimicChestAttacker attacker = createNewAttacker(block);
+        if (attacker != null && savedHealth != null) {
+            attacker.setHealth(savedHealth);
         }
+    }
+
+    // -------------------------------------------------------------------------
+    // Misc helpers
+    // -------------------------------------------------------------------------
+
+    public MimicChestPart getMimicPart(Block block) {
+        return registry.get(block);
+    }
+
+    public void destroyMimic(Block block, boolean becauseBroken) {
+        MimicChestPart part = registry.get(block);
+        if (part == null) return;
+        part.onDestroy(becauseBroken);
+        registry.unregister(block);
+        MimicPersistentData.clear(block, plugin);
+    }
+
+    public void addMimic(Block block, MimicChestPart mimic) {
+        if (mimic == null) return;
+        registry.register(block, mimic);
+        MimicPersistentData.tag(block, mimic.getState(), plugin);
+    }
+
+    public MimicChestEater getEaterForPlayer(Player player) {
+        return registry.getEaterForPlayer(player);
+    }
+
+    public void logInfo(String message) {
+        plugin.getServer().getConsoleSender().sendMessage(
+                Component.text("[Mimic] ", NamedTextColor.AQUA)
+                        .append(Component.text(message, NamedTextColor.WHITE)));
+    }
+
+    public void logWarning(String message) {
+        plugin.getServer().getConsoleSender().sendMessage(
+                Component.text("[Mimic] ", NamedTextColor.AQUA)
+                        .append(Component.text(message, NamedTextColor.RED)));
     }
 }

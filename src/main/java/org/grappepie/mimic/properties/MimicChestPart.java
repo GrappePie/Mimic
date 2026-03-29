@@ -1,15 +1,17 @@
 package org.grappepie.mimic.properties;
 
+import org.bukkit.Location;
 import org.bukkit.block.Block;
 import org.bukkit.block.Chest;
-import org.bukkit.Location;
+import org.grappepie.mimic.config.MimicConfig;
 
 public abstract class MimicChestPart {
-    protected boolean destroyed;
+
+    protected boolean destroyed = false;
     public final Block block;
     protected final Location mount;
-    protected final Chest chest;
     protected final MimicChestService service;
+    protected final MimicConfig config;
     protected MimicStateHologram hologram;
     protected MimicState state;
     protected boolean debugMode = false;
@@ -18,12 +20,13 @@ public abstract class MimicChestPart {
     public MimicChestPart(MimicChestService service, Block block) {
         this.service = service;
         this.block = block;
+        this.config = service.getConfig();
         this.mount = block.getLocation().add(0.5, 1.2, 0.5);
 
         if (!(block.getState() instanceof Chest)) {
-            throw new RuntimeException("Can't create MimicPart for non-chest block [" + block.getX() + ":" + block.getY() + ":" + block.getZ() + "]");
+            throw new RuntimeException("Cannot create MimicPart on a non-chest block ["
+                    + block.getX() + ":" + block.getY() + ":" + block.getZ() + "]");
         }
-        this.chest = (Chest) block.getState();
     }
 
     public void updateHologram(String text) {

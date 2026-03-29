@@ -5,7 +5,43 @@ api-version: '1.21'
 
 commands:
   spawnmimic:
-    description: "Spawn a mimic chest."
+    description: "Spawn a Mimic chest in idle mode at the targeted chest."
+    usage: /spawnmimic
+    permission: mimic.spawn
+  spawnmimicattacker:
+    description: "Spawn a Mimic chest in attacker mode at the targeted chest."
+    usage: /spawnmimicattacker [maxHealth] [scanRadius]
+    permission: mimic.spawn
+  spawnmimiceater:
+    description: "Spawn a Mimic chest in eater mode at the targeted chest."
+    usage: /spawnmimiceater
+    permission: mimic.spawn
   mimicdebug:
     description: "Toggle debug mode for mimics."
     usage: /mimicdebug <true|false>
+    permission: mimic.debug
+  mimicreload:
+    description: "Reload the Mimic configuration."
+    usage: /mimicreload
+    permission: mimic.admin
+  givemimicsoul:
+    description: "Give a Mimic Soul item to yourself or another player."
+    usage: /givemimicsoul [player] [amount]
+    permission: mimic.admin
+
+permissions:
+  mimic.*:
+    description: "All Mimic permissions."
+    children:
+      mimic.spawn: true
+      mimic.debug: true
+      mimic.admin: true
+  mimic.spawn:
+    description: "Allows spawning Mimic chests."
+    default: op
+  mimic.debug:
+    description: "Allows toggling debug mode."
+    default: op
+  mimic.admin:
+    description: "Allows administrative commands like reload."
+    default: op
