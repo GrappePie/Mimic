@@ -50,8 +50,8 @@
             <phase>package</phase>
             <configuration>
               <target>
-                <copy file="${project.build.directory}/${project.build.finalName}-shaded.jar"
-                      tofile="C:/Users/taffy/Documents/MinecraftServers/Paper 1.21.8/plugins/${project.build.finalName}.jar"/>
+                <copy file="${project.build.directory}/${project.build.finalName}.jar"
+                      tofile="C:/Users/taffy/Documents/MinecraftServers/1.21.11/plugins/${project.build.finalName}.jar"/>
               </target>
             </configuration>
             <goals>
