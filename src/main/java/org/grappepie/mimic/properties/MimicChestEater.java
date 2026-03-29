@@ -177,6 +177,8 @@ public class MimicChestEater extends MimicChestPart {
 
     public void eatItem(ItemStack itemStack) {
         if (itemStack == null) return;
+        // If allergy is already in progress, ignore new items to prevent duplication
+        if (allergyTask != null) return;
         if (itemStack.getType() == Material.COD || itemStack.getType() == Material.SALMON) {
             processAllergy();
             return;
@@ -225,6 +227,7 @@ public class MimicChestEater extends MimicChestPart {
     }
 
     private void processAllergy() {
+        if (allergyTask != null) return;  // Already vomiting, don't start again
         List<ItemStack> items = Arrays.asList(inventory.getContents());
         inventory.clear();
         if (eaterTask != null) { eaterTask.cancel(); eaterTask = null; }

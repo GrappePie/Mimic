@@ -67,9 +67,10 @@ public class MimicChestEaterListener implements Listener {
     public void onPlayerDrop(PlayerDropItemEvent event) {
         MimicChestEater eater = registry.getEaterForPlayer(event.getPlayer());
         if (eater == null) return;
+        // Do NOT cancel — cancelling restores the item to inventory while
+        // eatItem() already consumed it, causing duplication.
         eater.eatItem(event.getItemDrop().getItemStack());
         event.getItemDrop().remove();
-        event.setCancelled(true);
     }
 
     @EventHandler
