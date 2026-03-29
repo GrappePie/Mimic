@@ -100,21 +100,26 @@ public class MimicChestEater extends MimicChestPart {
 
     /** Called by MimicChestEaterListener on player death. */
     public void handleEatenPlayerDeath(PlayerDeathEvent event) {
+        // Save reference before releasing so we can exclude this player from the next-victim search
+        Player deadPlayer = eatenPlayer;
+
         List<ItemStack> items = new ArrayList<>(event.getDrops());
         event.getDrops().clear();
         items.forEach(this::eatItem);
 
         ItemStack skull = new ItemStack(Material.PLAYER_HEAD);
         SkullMeta meta = (SkullMeta) skull.getItemMeta();
-        meta.setOwningPlayer(eatenPlayer);
+        meta.setOwningPlayer(deadPlayer);
         skull.setItemMeta(meta);
         barfEntity(block.getWorld().dropItem(block.getLocation(), skull));
 
-        releasePlayer();
+        releasePlayer();  // sets eatenPlayer = null
 
         Bukkit.getScheduler().runTask(service.getPlugin(), () -> {
             if (destroyed) return;
-            List<Player> nearbyPlayers = checkNearbyPlayers();
+            // Exclude the player who just died: they are still at the chest location
+            // while dead and would otherwise be immediately re-eaten on respawn
+            List<Player> nearbyPlayers = checkNearbyPlayersExcluding(deadPlayer);
             if (nearbyPlayers.isEmpty()) {
                 service.changeToIdle(block);
             } else {
@@ -262,8 +267,14 @@ public class MimicChestEater extends MimicChestPart {
     }
 
     private List<Player> checkNearbyPlayers() {
+        return checkNearbyPlayersExcluding(null);
+    }
+
+    private List<Player> checkNearbyPlayersExcluding(Player exclude) {
         return block.getWorld().getPlayers().stream()
-                .filter(p -> p.getLocation().distance(block.getLocation()) <= 5)
+                .filter(p -> p != exclude
+                        && !p.isDead()
+                        && p.getLocation().distance(block.getLocation()) <= 5)
                 .collect(Collectors.toList());
     }
 

@@ -6,10 +6,7 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
-import org.bukkit.event.player.PlayerDropItemEvent;
-import org.bukkit.event.player.PlayerMoveEvent;
-import org.bukkit.event.player.PlayerQuitEvent;
-import org.bukkit.event.player.PlayerTeleportEvent;
+import org.bukkit.event.player.*;
 import org.grappepie.mimic.properties.MimicChestEater;
 import org.grappepie.mimic.registry.MimicRegistry;
 
@@ -31,8 +28,9 @@ public class MimicChestEaterListener implements Listener {
         MimicChestEater eater = registry.getEaterForPlayer(event.getPlayer());
         if (eater == null) return;
 
-        // Block position teleports (e.g. from ender pearls) while eaten
         if (event instanceof PlayerTeleportEvent) {
+            // Block all teleports (ender pearl, chorus fruit, etc.) while eaten.
+            // Respawn is handled by onPlayerRespawn before this fires.
             event.setCancelled(true);
             return;
         }
@@ -42,6 +40,18 @@ public class MimicChestEaterListener implements Listener {
                 || event.getFrom().getBlockY() != event.getTo().getBlockY()
                 || event.getFrom().getBlockZ() != event.getTo().getBlockZ()) {
             event.setTo(event.getFrom());
+        }
+    }
+
+    /**
+     * Safety net: if a player respawns while still registered as eaten
+     * (e.g. the death event was missed), release them unconditionally.
+     */
+    @EventHandler
+    public void onPlayerRespawn(PlayerRespawnEvent event) {
+        MimicChestEater eater = registry.getEaterForPlayer(event.getPlayer());
+        if (eater != null) {
+            eater.releasePlayer();
         }
     }
 
