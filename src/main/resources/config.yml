@@ -1,0 +1,24 @@
+attacker:
+  default-max-health: 20.0
+  default-max-attack-delay: 40
+  default-scan-radius: 12.0
+  display-attack-zone: false
+
+eater:
+  default-eat-item-chance: 0.5
+  damage-period-ticks: 400
+  eat-item-period-ticks: 400
+
+magic-circle:
+  interval-ticks: 4
+  points-per-edge: 10
+  radius-1: 1.5
+  radius-2: 2.0
+  radius-3: 2.5
+  radius-4: 3.0
+
+chunk-spawn:
+  # Probability (0.0–1.0) that a qualifying chest becomes a mimic on chunk load
+  chance: 0.2
+  # Only convert chests below this Y level
+  max-y: 60

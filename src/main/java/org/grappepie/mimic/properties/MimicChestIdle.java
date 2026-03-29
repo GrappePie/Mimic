@@ -1,12 +1,7 @@
 package org.grappepie.mimic.properties;
 
 import org.bukkit.Color;
-import org.bukkit.Location;
-import org.bukkit.Material;
 import org.bukkit.block.Block;
-import org.bukkit.scheduler.BukkitRunnable;
-import org.bukkit.util.Vector;
-import org.bukkit.Particle;
 
 public class MimicChestIdle extends MimicChestPart {
 
@@ -14,8 +9,9 @@ public class MimicChestIdle extends MimicChestPart {
 
     public MimicChestIdle(MimicChestService service, Block block) {
         super(service, block);
-        this.magicCircle = new MimicUtils.MagicCircle(block,Color.WHITE);
-        this.magicCircle.runTaskTimer(service.getPlugin(), 0, 2);
+        this.state = MimicState.IDLE;
+        this.magicCircle = new MimicUtils.MagicCircle(block, Color.WHITE, config);
+        this.magicCircle.runTaskTimer(service.getPlugin(), 0, config.getMagicCircleIntervalTicks());
     }
 
     public void clearMagicCircle() {
@@ -27,18 +23,10 @@ public class MimicChestIdle extends MimicChestPart {
 
     @Override
     public void onDestroy(boolean becauseBroken) {
+        if (destroyed) return;
+        destroyed = true;
         clearMagicCircle();
-        if (becauseBroken) {
-            MimicChestAttacker attacker = service.createNewAttacker(block);
-            if (attacker != null) {
-                service.addMimic(block, attacker);
-            } else {
-                // Si el atacante no se pudo crear, asegúrate de marcar el MimicIdle como destruido
-                destroyed = true;
-            }
-        } else {
-            destroyed = true;
-        }
+        removeHologram();
     }
 
     @Override
@@ -48,11 +36,11 @@ public class MimicChestIdle extends MimicChestPart {
 
     @Override
     protected void showReachArea() {
-        // Implementar lógica para mostrar el área de alcance
+        // Idle mimics have no attack range to visualise
     }
 
     @Override
     protected void removeReachArea() {
-        // Implementar lógica para eliminar el área de alcance
+        // Idle mimics have no attack range to visualise
     }
 }

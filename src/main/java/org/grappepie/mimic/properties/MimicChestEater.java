@@ -7,58 +7,56 @@ import org.bukkit.block.Chest;
 import org.bukkit.block.data.Directional;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
-import org.bukkit.event.EventHandler;
-import org.bukkit.event.HandlerList;
-import org.bukkit.event.Listener;
-import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
-import org.bukkit.event.inventory.InventoryClickEvent;
-import org.bukkit.event.player.*;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.SkullMeta;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
+import org.bukkit.scheduler.BukkitRunnable;
+import org.bukkit.scheduler.BukkitTask;
 import org.bukkit.util.Vector;
 
 import java.util.*;
 import java.util.stream.Collectors;
 
 public class MimicChestEater extends MimicChestPart {
+
     private final Inventory inventory;
     private final Location teleportLocation;
-    private Timer eatingTimer;
-    private TimerTask eaterProcess;
+    private BukkitTask eaterTask;
+    private BukkitTask allergyTask;
     private boolean isOpen = false;
-    private double eatItemChance = 0.5;
+    private final double eatItemChance;
 
     private Player eatenPlayer;
     private boolean eatenPlayerAllowedFly;
-    private Listener mimicListener;
     private MimicUtils.MagicCircle magicCircle;
+    private Inventory fakeInventory;
 
-    public MimicChestEater(MimicChestService service, Block block, Player awakener, Timer workspace, Double health) {
+    public MimicChestEater(MimicChestService service, Block block, Player awakener, Double health) {
         super(service, block);
-        this.magicCircle = new MimicUtils.MagicCircle(block,Color.ORANGE);
-        this.magicCircle.runTaskTimer(service.getPlugin(), 0, 2);
+        this.state = MimicState.EATER;
         this.health = health;
-        this.eatingTimer = workspace;
+        this.eatItemChance = config.getEaterDefaultEatItemChance();
+        this.magicCircle = new MimicUtils.MagicCircle(block, Color.ORANGE, config);
+        this.magicCircle.runTaskTimer(service.getPlugin(), 0, config.getMagicCircleIntervalTicks());
         this.inventory = ((Chest) block.getState()).getInventory();
         this.teleportLocation = block.getLocation().add(0.5, -0.9, 0.5);
         this.eatenPlayer = awakener;
 
-        generatePlayerHead(awakener); // Pone la cabeza del jugador en la ranura 0 (de lo contrario, no se cargaría la skin del cráneo)
+        if (awakener != null) {
+            generatePlayerHead(awakener);
+        }
 
         openChest(true);
-        new Timer().schedule(new TimerTask() {
+        new BukkitRunnable() {
             @Override
             public void run() {
-                Bukkit.getScheduler().runTask(service.getPlugin(), () -> {
-                    closeChest(false);
-                    playBurpSound(teleportLocation);
-                });
+                closeChest(false);
+                playBurpSound(teleportLocation);
             }
-        }, 2 * 50);
+        }.runTaskLater(service.getPlugin(), 2L);
 
         if (eatenPlayer != null) {
             awakener.teleport(teleportLocation);
@@ -66,112 +64,128 @@ public class MimicChestEater extends MimicChestPart {
             MimicUtils.sendFakePlayerEquipment(awakener, getPlayerHead());
             eatenPlayerAllowedFly = awakener.getAllowFlight();
             awakener.setAllowFlight(true);
+            startEaterTask();
         }
+    }
 
-        eaterProcess = new TimerTask() {
+    private void startEaterTask() {
+        if (eaterTask != null) eaterTask.cancel();
+        long period = config.getEaterDamagePeriodTicks();
+        eaterTask = new BukkitRunnable() {
             @Override
             public void run() {
-                if (eatenPlayer != null) {
-                    Bukkit.getScheduler().runTask(service.getPlugin(), () -> {
-                        awakener.damage(1);
-                        if (Math.random() < eatItemChance) {
-                            eatPlayerItem();
-                        }
-                    });
+                if (eatenPlayer == null || destroyed) {
+                    cancel();
+                    return;
+                }
+                eatenPlayer.damage(1);
+                if (Math.random() < eatItemChance) {
+                    eatPlayerItem();
                 }
             }
-        };
-        eatingTimer.schedule(eaterProcess, 0, 20 * 50);
-
-        startListeners();
+        }.runTaskTimer(service.getPlugin(), period, period);
     }
 
     public Player getEatenPlayer() {
         return eatenPlayer;
     }
 
-    private void startListeners() {
-        mimicListener = new Listener() {
-            @EventHandler
-            public void onInventoryClick(InventoryClickEvent event) {
-                if (event.getWhoClicked() == eatenPlayer) {
-                    event.setCancelled(true);
-                }
-            }
+    public boolean isOpen() {
+        return isOpen;
+    }
 
-            @EventHandler
-            public void onPlayerMove(PlayerMoveEvent event) {
-                if (event.getPlayer() != eatenPlayer) return;
-                if (event instanceof PlayerTeleportEvent) {
-                    event.setCancelled(true);
-                    return;
-                }
-                Location from = event.getFrom();
-                Location to = event.getTo();
-                if (from.getX() != to.getX() || from.getY() != to.getY() || from.getZ() != to.getZ()) {
-                    event.setTo(from);
-                }
-            }
+    public boolean hasEatenPlayer() {
+        return eatenPlayer != null;
+    }
 
-            @EventHandler
-            public void onPlayerDeath(PlayerDeathEvent event) {
-                if (event.getEntity() != eatenPlayer) return;
-                List<ItemStack> items = new ArrayList<>(event.getDrops());
-                event.getDrops().clear();
-                items.forEach(MimicChestEater.this::eatItem);
-                ItemStack skull = new ItemStack(Material.PLAYER_HEAD);
-                SkullMeta meta = (SkullMeta) skull.getItemMeta();
-                meta.setOwningPlayer(eatenPlayer);
-                skull.setItemMeta(meta);
-                barfEntity(block.getWorld().dropItem(block.getLocation(), skull));
+    /** Called by MimicChestEaterListener on player death. */
+    public void handleEatenPlayerDeath(PlayerDeathEvent event) {
+        List<ItemStack> items = new ArrayList<>(event.getDrops());
+        event.getDrops().clear();
+        items.forEach(this::eatItem);
 
-                // Cancelar el temporizador eaterProcess
-                eaterProcess.cancel();
+        ItemStack skull = new ItemStack(Material.PLAYER_HEAD);
+        SkullMeta meta = (SkullMeta) skull.getItemMeta();
+        meta.setOwningPlayer(eatenPlayer);
+        skull.setItemMeta(meta);
+        barfEntity(block.getWorld().dropItem(block.getLocation(), skull));
 
-                releasePlayer(); // Asegurarse de liberar al jugador antes de cambiar a idle
+        releasePlayer();
 
+        Bukkit.getScheduler().runTask(service.getPlugin(), () -> {
+            if (destroyed) return;
+            List<Player> nearbyPlayers = checkNearbyPlayers();
+            if (nearbyPlayers.isEmpty()) {
                 service.changeToIdle(block);
-
-                // Comprobar jugadores cercanos
-                List<Player> nearbyPlayers = checkNearbyPlayers();
-                Bukkit.getScheduler().runTask(service.getPlugin(), () -> {
-                    if (nearbyPlayers.isEmpty()) {
-                        MimicChestIdle idle = new MimicChestIdle(service, block);
-                        service.addMimic(block, idle);
-                    } else {
-                        Player nextPlayer = nearbyPlayers.get(0);
-                        eatPlayer(nextPlayer);
-                    }
-                });
+            } else {
+                eatPlayer(nearbyPlayers.get(0));
             }
+        });
+    }
 
-            @EventHandler
-            public void onPlayerQuit(PlayerQuitEvent event) {
-                if (event.getPlayer() != eatenPlayer) return;
-                Player player = eatenPlayer;
-                player.setHealth(0); // Llama a onPlayerDeath
-                eatenPlayer = null;
-            }
+    public void releasePlayer() {
+        if (eatenPlayer == null) return;
+        if (eaterTask != null) { eaterTask.cancel(); eaterTask = null; }
+        eatenPlayer.setAllowFlight(eatenPlayerAllowedFly);
+        for (PotionEffect effect : eatenPlayer.getActivePotionEffects()) {
+            eatenPlayer.removePotionEffect(effect.getType());
+        }
+        MimicUtils.sendRealPlayerEquipment(eatenPlayer);
+        eatenPlayer = null;
+    }
 
-            @EventHandler
-            public void onPlayerDrop(PlayerDropItemEvent event) {
-                if (event.getPlayer() != eatenPlayer) return;
-                eatItem(event.getItemDrop().getItemStack());
-                event.getItemDrop().remove();
-            }
+    public void clearMagicCircle() {
+        if (magicCircle != null) {
+            magicCircle.cancel();
+            magicCircle = null;
+        }
+    }
 
-            @EventHandler
-            public void onEntityDamageByEntity(EntityDamageByEntityEvent event) {
-                if (event.getDamager() != eatenPlayer) return;
-                if (!isOpen) event.setCancelled(true);
-            }
-        };
-        service.getPlugin().getServer().getPluginManager().registerEvents(mimicListener, service.getPlugin());
+    public void openChest(boolean silent) {
+        MimicUtils.openChest(block, silent);
+        isOpen = true;
+        if (eatenPlayer != null) {
+            eatenPlayer.removePotionEffect(PotionEffectType.BLINDNESS);
+            MimicUtils.sendFakePlayerEquipment(eatenPlayer, getPlayerHead());
+        }
+    }
+
+    public void closeChest(boolean silent) {
+        MimicUtils.closeChest(block, silent);
+        isOpen = false;
+        if (eatenPlayer != null) {
+            eatenPlayer.addPotionEffect(new PotionEffect(PotionEffectType.BLINDNESS, Integer.MAX_VALUE, 0));
+            MimicUtils.sendFakePlayerEquipment(eatenPlayer, null);
+        }
+    }
+
+    public void eatPlayer(Player player) {
+        this.eatenPlayer = player;
+        generatePlayerHead(player);
+        player.teleport(teleportLocation);
+        player.addPotionEffect(new PotionEffect(PotionEffectType.INVISIBILITY, Integer.MAX_VALUE, 1));
+        MimicUtils.sendFakePlayerEquipment(player, getPlayerHead());
+        this.eatenPlayerAllowedFly = player.getAllowFlight();
+        player.setAllowFlight(true);
+        startEaterTask();
+    }
+
+    public void eatItem(ItemStack itemStack) {
+        if (itemStack == null) return;
+        if (itemStack.getType() == Material.COD || itemStack.getType() == Material.SALMON) {
+            processAllergy();
+            return;
+        }
+        if (inventory.firstEmpty() == -1) {
+            barfEntity(block.getWorld().dropItem(block.getLocation(), itemStack));
+        } else {
+            inventory.addItem(itemStack);
+            block.getWorld().playSound(block.getLocation(), Sound.ENTITY_GENERIC_EAT, 1, 1);
+        }
     }
 
     private void eatPlayerItem() {
         if (eatenPlayer == null) return;
-
         Inventory inv = eatenPlayer.getInventory();
         List<Integer> slots = new ArrayList<>();
         ItemStack[] contents = inv.getContents();
@@ -183,6 +197,7 @@ public class MimicChestEater extends MimicChestPart {
         if (eatenPlayer.getInventory().getLeggings() != null) slots.add(-2);
         if (eatenPlayer.getInventory().getBoots() != null) slots.add(-1);
         if (slots.isEmpty()) return;
+
         int slot = slots.get(new Random().nextInt(slots.size()));
         ItemStack itemStack;
         if (slot == -4) {
@@ -207,105 +222,61 @@ public class MimicChestEater extends MimicChestPart {
     private void processAllergy() {
         List<ItemStack> items = Arrays.asList(inventory.getContents());
         inventory.clear();
-        eaterProcess.cancel();
-        new Timer().schedule(new TimerTask() {
-            int i = 0;
+        if (eaterTask != null) { eaterTask.cancel(); eaterTask = null; }
+
+        allergyTask = new BukkitRunnable() {
+            private int i = 0;
 
             @Override
             public void run() {
-                Bukkit.getScheduler().runTask(service.getPlugin(), () -> {
-                    if (i >= items.size()) {
-                        MimicChestService.getInstance().destroyMimic(block, false);
-                        if (health != null) {
-                            MimicChestAttacker attacker = MimicChestService.getInstance().createNewAttacker(block, new HashMap<>());
-                            attacker.setHealth(health);
-                        }
-                        cancel();
-                        return;
-                    }
-                    Entity entity = block.getWorld().dropItem(block.getLocation(), items.get(i));
+                if (i >= items.size()) {
+                    cancel();
+                    double savedHealth = health != null ? health : config.getAttackerDefaultMaxHealth();
+                    service.destroyMimic(block, false);
+                    MimicChestAttacker attacker = service.createNewAttacker(block);
+                    if (attacker != null) attacker.setHealth(savedHealth);
+                    return;
+                }
+                ItemStack item = items.get(i);
+                if (item != null) {
+                    Entity entity = block.getWorld().dropItem(block.getLocation(), item);
                     barfEntity(entity);
-                    i++;
-                });
+                }
+                i++;
             }
-        }, 0, 2 * 50);
+        }.runTaskTimer(service.getPlugin(), 0L, 2L);
     }
 
-    public void releasePlayer() {
-        if (eatenPlayer != null) {
-            eatenPlayer.setAllowFlight(eatenPlayerAllowedFly);
-            for (PotionEffect effect : eatenPlayer.getActivePotionEffects()) {
-                eatenPlayer.removePotionEffect(effect.getType());
+    private void barfEntity(Entity entity) {
+        if (entity == null) return;
+        entity.teleport(block.getLocation());
+        MimicUtils.openChest(block, true);
+        new BukkitRunnable() {
+            @Override
+            public void run() {
+                playBurpSound(block.getLocation());
+                entity.setVelocity(getBarfVector().multiply(0.5));
+                MimicUtils.closeChest(block, true);
             }
-            MimicUtils.sendRealPlayerEquipment(eatenPlayer);
-            HandlerList.unregisterAll(mimicListener); // Unregister the event listeners
-            eatenPlayer = null;
-        }
-    }
-
-    public void clearMagicCircle() {
-        if (magicCircle != null) {
-            magicCircle.cancel();
-            magicCircle = null;
-        }
+        }.runTaskLater(service.getPlugin(), 5L);
     }
 
     private List<Player> checkNearbyPlayers() {
         return block.getWorld().getPlayers().stream()
-                .filter(player -> player.getLocation().distance(block.getLocation()) <= 5)
+                .filter(p -> p.getLocation().distance(block.getLocation()) <= 5)
                 .collect(Collectors.toList());
     }
 
-    private void eatItem(ItemStack itemStack) {
-        if (itemStack.getType() == Material.COD || itemStack.getType() == Material.SALMON) {
-            processAllergy();
-            return;
-        }
-        if (inventory.firstEmpty() == -1) {
-            Entity item = block.getWorld().dropItem(block.getLocation(), itemStack);
-            barfEntity(item);
-        } else {
-            inventory.addItem(itemStack);
-            block.getWorld().playSound(block.getLocation(), Sound.ENTITY_GENERIC_EAT, 1, 1);
-        }
-    }
-
-    private void barfEntity(Entity entity) {
-        if (entity == null) {
-            return;
-        }
-        entity.teleport(block.getLocation());
-        MimicUtils.openChest(block, true);
-        new Timer().schedule(new TimerTask() {
-            @Override
-            public void run() {
-                Bukkit.getScheduler().runTask(service.getPlugin(), () -> {
-                    playBurpSound(block.getLocation());
-                    entity.setVelocity(getBarfVector().multiply(0.5));
-                    MimicUtils.closeChest(block, true);
-                });
-            }
-        }, 5 * 50);
-    }
-
     private Vector getBarfVector() {
-        // Use the chest's direction to determine the barf vector
-        if (block.getState() instanceof Chest) {
-            Chest chest = (Chest) block.getState();
+        if (block.getState() instanceof Chest chest) {
             Directional directional = (Directional) chest.getBlockData();
-            BlockFace facing = directional.getFacing();
-            switch (facing) {
-                case NORTH:
-                    return new Vector(0, 1, -1);
-                case SOUTH:
-                    return new Vector(0, 1, 1);
-                case WEST:
-                    return new Vector(-1, 1, 0);
-                case EAST:
-                    return new Vector(1, 1, 0);
-                default:
-                    return new Vector(0, 1, 0);
-            }
+            return switch (directional.getFacing()) {
+                case NORTH -> new Vector(0, 1, -1);
+                case SOUTH -> new Vector(0, 1, 1);
+                case WEST -> new Vector(-1, 1, 0);
+                case EAST -> new Vector(1, 1, 0);
+                default -> new Vector(0, 1, 0);
+            };
         }
         return new Vector(0, 1, 0);
     }
@@ -314,91 +285,59 @@ public class MimicChestEater extends MimicChestPart {
         loc.getWorld().playSound(loc, Sound.ENTITY_PLAYER_BURP, 1, 1);
     }
 
-    public boolean isOpen() {
-        return isOpen;
-    }
-
-    public void openChest(boolean silent) {
-        MimicUtils.openChest(block, silent);
-        isOpen = true;
-        if (eatenPlayer != null) {
-            eatenPlayer.removePotionEffect(PotionEffectType.BLINDNESS);
-            MimicUtils.sendFakePlayerEquipment(eatenPlayer, getPlayerHead());
-        }
-    }
-
-    public void closeChest(boolean silent) {
-        MimicUtils.closeChest(block, silent);
-        isOpen = false;
-        if (eatenPlayer != null) {
-            eatenPlayer.addPotionEffect(new PotionEffect(PotionEffectType.BLINDNESS, Integer.MAX_VALUE, 0));
-            MimicUtils.sendFakePlayerEquipment(eatenPlayer, null);
-        }
-    }
-
-    private Inventory fakeInventory;
-
     private void generatePlayerHead(Player player) {
         if (fakeInventory == null) {
             fakeInventory = Bukkit.createInventory(null, 9);
         }
         ItemStack itemStack = new ItemStack(Material.PLAYER_HEAD, 1);
         SkullMeta meta = (SkullMeta) itemStack.getItemMeta();
-        meta.setOwningPlayer(player);
+        if (player != null) meta.setOwningPlayer(player);
         meta.setDisplayName("Mimic's head!");
         itemStack.setItemMeta(meta);
         fakeInventory.setItem(0, itemStack);
     }
 
     private ItemStack getPlayerHead() {
+        if (fakeInventory == null) return null;
         return fakeInventory.getItem(0);
     }
 
     @Override
     public void onDestroy(boolean becauseBroken) {
+        if (destroyed) return;
         destroyed = true;
-        eatingTimer.cancel();
+        if (eaterTask != null) { eaterTask.cancel(); eaterTask = null; }
+        if (allergyTask != null) { allergyTask.cancel(); allergyTask = null; }
+        clearMagicCircle();
         if (eatenPlayer != null) {
-            barfEntity(eatenPlayer);
+            if (becauseBroken) barfEntity(eatenPlayer);
             eatenPlayer.setAllowFlight(eatenPlayerAllowedFly);
             for (PotionEffect effect : eatenPlayer.getActivePotionEffects()) {
                 eatenPlayer.removePotionEffect(effect.getType());
             }
             MimicUtils.sendRealPlayerEquipment(eatenPlayer);
-            HandlerList.unregisterAll(mimicListener); // Unregister the event listeners
             eatenPlayer = null;
         }
+        removeHologram();
         removeReachArea();
     }
 
     @Override
     public void onTakeDamage(double damage) {
+        if (health == null) health = config.getAttackerDefaultMaxHealth();
         this.health -= damage;
         if (this.health <= 0) {
             this.onDestroy(true);
         }
     }
 
-    public void eatPlayer(Player player) {
-        this.eatenPlayer = player;
-        player.teleport(teleportLocation);
-        player.addPotionEffect(new PotionEffect(PotionEffectType.INVISIBILITY, Integer.MAX_VALUE, 1));
-        MimicUtils.sendFakePlayerEquipment(player, getPlayerHead());
-        this.eatenPlayerAllowedFly = player.getAllowFlight();
-        player.setAllowFlight(true);
+    @Override
+    protected void showReachArea() {
+        // Eater mimics have no ranged attack zone to visualise
     }
 
     @Override
-    public void showReachArea() {
-        // Implement logic to show reach area
-    }
-
-    @Override
-    public void removeReachArea() {
-        // Implement logic to remove reach area
-    }
-
-    public boolean hasEatenPlayer() {
-        return eatenPlayer != null;
+    protected void removeReachArea() {
+        // Eater mimics have no ranged attack zone to visualise
     }
 }

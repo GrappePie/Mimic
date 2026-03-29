@@ -1,5 +1,6 @@
 package org.grappepie.mimic.listeners;
 
+import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
@@ -8,42 +9,77 @@ import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
-import org.grappepie.mimic.properties.MimicChestService;
+import org.bukkit.event.player.PlayerTeleportEvent;
+import org.grappepie.mimic.properties.MimicChestEater;
+import org.grappepie.mimic.registry.MimicRegistry;
 
+/**
+ * Handles all player-side events that concern an eaten player.
+ * Events are forwarded to the relevant MimicChestEater instance.
+ * This listener is always registered; it simply no-ops when no eaten player matches.
+ */
 public class MimicChestEaterListener implements Listener {
-    private final MimicChestService mimicChestService;
 
-    public MimicChestEaterListener(MimicChestService mimicChestService) {
-        this.mimicChestService = mimicChestService;
+    private final MimicRegistry registry;
+
+    public MimicChestEaterListener(MimicRegistry registry) {
+        this.registry = registry;
     }
 
     @EventHandler
     public void onPlayerMove(PlayerMoveEvent event) {
-        //mimicChestService.onPlayerMove(event);
+        MimicChestEater eater = registry.getEaterForPlayer(event.getPlayer());
+        if (eater == null) return;
+
+        // Block position teleports (e.g. from ender pearls) while eaten
+        if (event instanceof PlayerTeleportEvent) {
+            event.setCancelled(true);
+            return;
+        }
+
+        // Prevent any XYZ position change while eaten
+        if (event.getFrom().getBlockX() != event.getTo().getBlockX()
+                || event.getFrom().getBlockY() != event.getTo().getBlockY()
+                || event.getFrom().getBlockZ() != event.getTo().getBlockZ()) {
+            event.setTo(event.getFrom());
+        }
     }
 
     @EventHandler
     public void onPlayerQuit(PlayerQuitEvent event) {
-        //mimicChestService.onPlayerQuit(event);
+        MimicChestEater eater = registry.getEaterForPlayer(event.getPlayer());
+        if (eater == null) return;
+        // Kill the player so onPlayerDeath fires and the mimic transitions to idle
+        event.getPlayer().setHealth(0);
     }
 
     @EventHandler
-    public void onItemDrop(PlayerDropItemEvent event) {
-        //mimicChestService.onItemDrop(event);
-    }
-
-    @EventHandler
-    public void onPlayerAttack(EntityDamageByEntityEvent event) {
-        //mimicChestService.onPlayerAttack(event);
+    public void onPlayerDrop(PlayerDropItemEvent event) {
+        MimicChestEater eater = registry.getEaterForPlayer(event.getPlayer());
+        if (eater == null) return;
+        eater.eatItem(event.getItemDrop().getItemStack());
+        event.getItemDrop().remove();
+        event.setCancelled(true);
     }
 
     @EventHandler
     public void onPlayerDeath(PlayerDeathEvent event) {
-        //mimicChestService.onPlayerDeath(event);
+        MimicChestEater eater = registry.getEaterForPlayer(event.getEntity());
+        if (eater == null) return;
+        eater.handleEatenPlayerDeath(event);
     }
 
     @EventHandler
-    public void onInvClick(InventoryClickEvent event) {
-        //mimicChestService.onInvClick(event);
+    public void onInventoryClick(InventoryClickEvent event) {
+        if (!(event.getWhoClicked() instanceof Player player)) return;
+        MimicChestEater eater = registry.getEaterForPlayer(player);
+        if (eater != null) event.setCancelled(true);
+    }
+
+    @EventHandler
+    public void onEntityDamageByEntity(EntityDamageByEntityEvent event) {
+        if (!(event.getDamager() instanceof Player player)) return;
+        MimicChestEater eater = registry.getEaterForPlayer(player);
+        if (eater != null && !eater.isOpen()) event.setCancelled(true);
     }
 }

@@ -1,29 +1,34 @@
 package org.grappepie.mimic.properties;
 
-import org.bukkit.Bukkit;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Location;
-import org.bukkit.entity.ArmorStand;
-import org.bukkit.entity.EntityType;
-import org.bukkit.entity.Player;
+import org.bukkit.entity.Display;
+import org.bukkit.entity.TextDisplay;
 
 public class MimicStateHologram {
-    private final ArmorStand hologram;
+
+    private final TextDisplay display;
 
     public MimicStateHologram(Location location, String text) {
-        hologram = (ArmorStand) location.getWorld().spawnEntity(location.add(0.5, 2, 0.5), EntityType.ARMOR_STAND);
-        hologram.setCustomName(text);
-        hologram.setCustomNameVisible(true);
-        hologram.setInvisible(true);
-        hologram.setInvulnerable(true);
-        hologram.setGravity(false);
-        hologram.setMarker(true);
+        Location spawnLoc = location.clone().add(0.5, 2.0, 0.5);
+        display = spawnLoc.getWorld().spawn(spawnLoc, TextDisplay.class, d -> {
+            d.text(Component.text(text, NamedTextColor.YELLOW));
+            d.setGravity(false);
+            d.setPersistent(false);
+            d.setBillboard(Display.Billboard.CENTER);
+        });
     }
 
     public void updateText(String text) {
-        hologram.setCustomName(text);
+        if (display != null && !display.isDead()) {
+            display.text(Component.text(text, NamedTextColor.YELLOW));
+        }
     }
 
     public void remove() {
-        hologram.remove();
+        if (display != null && !display.isDead()) {
+            display.remove();
+        }
     }
 }

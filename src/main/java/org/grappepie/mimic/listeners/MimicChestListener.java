@@ -7,58 +7,73 @@ import org.bukkit.block.Chest;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.BlockBreakEvent;
+import org.bukkit.event.block.BlockExplodeEvent;
+import org.bukkit.event.entity.EntityExplodeEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.world.ChunkLoadEvent;
-import org.grappepie.mimic.properties.MimicChestPart;
+import org.grappepie.mimic.config.MimicConfig;
 import org.grappepie.mimic.properties.MimicChestService;
+import org.grappepie.mimic.registry.MimicRegistry;
 
 import java.util.Random;
 
+/**
+ * Handles all global mimic events: chunk loading, player interaction,
+ * block breaking, and explosions.
+ * (Replaces both MimicChestListener and MimicChestIdleListener.)
+ */
 public class MimicChestListener implements Listener {
-    private final MimicChestService mimicChestService;
-    private final Random random;
 
-    public MimicChestListener(MimicChestService mimicChestService) {
-        this.mimicChestService = mimicChestService;
-        this.random = new Random();
+    private final MimicChestService service;
+    private final MimicRegistry registry;
+    private final MimicConfig config;
+    private final Random random = new Random();
+
+    public MimicChestListener(MimicChestService service, MimicRegistry registry) {
+        this.service = service;
+        this.registry = registry;
+        this.config = service.getConfig();
     }
 
     @EventHandler
     public void onChunkLoad(ChunkLoadEvent event) {
-        // Iterate over all block states in the chunk and replace some dungeon chests with Mimic chests
+        if (!event.isNewChunk()) return;
         for (BlockState blockState : event.getChunk().getTileEntities()) {
             Block block = blockState.getBlock();
-            if (block.getType() == Material.CHEST && isDungeonChest((Chest) blockState)) {
-                if (shouldBeMimicChest()) {
-                    mimicChestService.createNewEater(block, null, null);
-                }
+            if (block.getType() != Material.CHEST) continue;
+            if (registry.isRegistered(block)) continue;
+            if (!isDungeonChest(block)) continue;
+            if (random.nextDouble() < config.getChunkMimicSpawnChance()) {
+                service.createNewEater(block, null, null);
             }
         }
     }
 
     @EventHandler
     public void onPlayerInteract(PlayerInteractEvent event) {
-        mimicChestService.onPlayerInteract(event);
+        service.onPlayerInteract(event);
     }
 
     @EventHandler
     public void onBlockBreak(BlockBreakEvent event) {
-        Block block = event.getBlock();
-        MimicChestPart part = mimicChestService.getMimicPart(block);
-        if (part != null) {
-            part.onDestroy(true);
-            mimicChestService.destroyMimic(block, true);
-        }
+        service.onBlockBreak(event);
     }
 
-    private boolean isDungeonChest(Chest chest) {
-        // Implement your logic to determine if this chest is part of a dungeon
-        // For example, you might check the surrounding blocks for dungeon features
-        return true; // Placeholder logic
+    @EventHandler
+    public void onEntityExplode(EntityExplodeEvent event) {
+        service.onEntityExplode(event);
     }
 
-    private boolean shouldBeMimicChest() {
-        // 20% chance to replace a chest with a Mimic chest
-        return random.nextInt(5) == 0;
+    @EventHandler
+    public void onBlockExplode(BlockExplodeEvent event) {
+        service.onBlockExplode(event);
+    }
+
+    /**
+     * Returns true if the chest qualifies as a "dungeon chest" for mimic spawning.
+     * Criteria: the chest must be below the configured max-y level.
+     */
+    private boolean isDungeonChest(Block block) {
+        return block.getY() < config.getChunkMimicMaxY();
     }
 }

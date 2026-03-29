@@ -1,12 +1,14 @@
 package org.grappepie.mimic.commands;
 
-import org.bukkit.ChatColor;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.grappepie.mimic.Mimic;
 
 public class MimicDebugCommand implements CommandExecutor {
+
     private final Mimic plugin;
 
     public MimicDebugCommand(Mimic plugin) {
@@ -16,19 +18,18 @@ public class MimicDebugCommand implements CommandExecutor {
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (args.length != 1) {
-            sender.sendMessage(ChatColor.RED + "Usage: /mimicdebug <true|false>");
+            sender.sendMessage(Component.text("Usage: /mimicdebug <true|false>", NamedTextColor.RED));
             return false;
+        }
+        if (args[0].equalsIgnoreCase("true")) {
+            plugin.setDebugMode(true);
+            sender.sendMessage(Component.text("Debug mode enabled.", NamedTextColor.GREEN));
+        } else if (args[0].equalsIgnoreCase("false")) {
+            plugin.setDebugMode(false);
+            sender.sendMessage(Component.text("Debug mode disabled.", NamedTextColor.GREEN));
         } else {
-            if(args[0].equalsIgnoreCase("true")) {
-                plugin.setDebugMode(true);
-                sender.sendMessage(ChatColor.GREEN + "Debug mode enabled");
-            } else if(args[0].equalsIgnoreCase("false")) {
-                plugin.setDebugMode(false);
-                sender.sendMessage(ChatColor.GREEN + "Debug mode disabled");
-            } else {
-                sender.sendMessage(ChatColor.RED + "Usage: /mimicdebug <true|false>");
-                return false;
-            }
+            sender.sendMessage(Component.text("Usage: /mimicdebug <true|false>", NamedTextColor.RED));
+            return false;
         }
         return true;
     }
