@@ -24,6 +24,10 @@ commands:
     description: "Reload the Mimic configuration."
     usage: /mimicreload
     permission: mimic.admin
+  givemimicsoul:
+    description: "Give a Mimic Soul item to yourself or another player."
+    usage: /givemimicsoul [player] [amount]
+    permission: mimic.admin
 
 permissions:
   mimic.*:

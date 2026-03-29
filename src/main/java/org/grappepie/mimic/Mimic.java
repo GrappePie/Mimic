@@ -5,8 +5,10 @@ import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Bukkit;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.grappepie.mimic.commands.*;
+import org.grappepie.mimic.items.MimicSoul;
 import org.grappepie.mimic.config.MimicConfig;
 import org.grappepie.mimic.listeners.*;
+import org.grappepie.mimic.listeners.MimicSoulListener;
 import org.grappepie.mimic.persistence.MimicPersistence;
 import org.grappepie.mimic.properties.MimicChestService;
 import org.grappepie.mimic.properties.MimicChestPart;
@@ -68,6 +70,9 @@ public final class Mimic extends JavaPlugin {
         getCommand("spawnmimicattacker").setExecutor(new SpawnMimicAttacker(service));
         getCommand("spawnmimiceater").setExecutor(new SpawnMimicEater(service));
         getCommand("mimicdebug").setExecutor(new MimicDebugCommand(this));
+        GiveMimicSoul giveSoulCmd = new GiveMimicSoul(this);
+        getCommand("givemimicsoul").setExecutor(giveSoulCmd);
+        getCommand("givemimicsoul").setTabCompleter(giveSoulCmd);
         getCommand("mimicreload").setExecutor((sender, cmd, label, args) -> {
             reloadConfig();
             sender.sendMessage(Component.text("Mimic config reloaded. Restart for full effect.",
@@ -80,5 +85,6 @@ public final class Mimic extends JavaPlugin {
         Bukkit.getPluginManager().registerEvents(new MimicChestListener(service, registry), this);
         Bukkit.getPluginManager().registerEvents(new MimicChestEaterListener(registry), this);
         Bukkit.getPluginManager().registerEvents(new MimicChestAttackerListener(registry), this);
+        Bukkit.getPluginManager().registerEvents(new MimicSoulListener(this, service, registry), this);
     }
 }

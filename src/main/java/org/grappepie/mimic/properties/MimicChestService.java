@@ -58,13 +58,8 @@ public class MimicChestService {
         Action action = event.getAction();
         MimicChestPart part = registry.get(block);
 
-        if (part == null || part.isDestroyed()) {
-            // First interaction with any unregistered chest creates an idle mimic
-            part = new MimicChestIdle(this, block);
-            registry.register(block, part);
-            MimicPersistentData.tag(block, MimicState.IDLE, plugin);
-            part.updateDebugMode(debugMode);
-        }
+        // Not a registered mimic — let Bukkit handle the chest normally
+        if (part == null || part.isDestroyed()) return;
 
         if (part instanceof MimicChestIdle) {
             if (action == Action.RIGHT_CLICK_BLOCK) {
